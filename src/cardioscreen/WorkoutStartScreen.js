@@ -1,4 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +63,26 @@ export default function WorkoutStartScreen({ route, navigation }) {
   // Animation for timer
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  
+  // Voice announcement refs
+  const lastAnnouncedTimeRef = useRef(null);
+  const exerciseAnnouncedRef = useRef(false);
+
+  // Configure audio to play in silent mode (iOS) and initialize audio session
+  useEffect(() => {
+    const configureAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true, // Play audio even when device is in silent mode
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true, // Lower other audio when speaking
+        });
+      } catch (error) {
+        console.log('Audio configuration error:', error);
+      }
+    };
+    configureAudio();
+  }, []);
 
   // Initialize first exercise and start timer automatically
   useEffect(() => {
@@ -69,8 +91,46 @@ export default function WorkoutStartScreen({ route, navigation }) {
       setTimeRemaining(parseInt(firstExercise.duration) || 45);
       setIsPlaying(true); // Start timer automatically
       setWorkoutStartTime(Date.now()); // Start tracking actual workout time
+      exerciseAnnouncedRef.current = false; // Reset announcement flag for new exercise
     }
   }, [exercises]);
+  
+  // Announce exercise name when exercise starts (when page opens or exercise changes)
+  useEffect(() => {
+    if (!isResting && exercises.length > 0 && currentExerciseIndex >= 0 && !exerciseAnnouncedRef.current) {
+      const currentExercise = exercises[currentExerciseIndex];
+      if (currentExercise?.name) {
+        // Announce exercise name with error handling
+        try {
+          Speech.speak(`Starting ${currentExercise.name}`, {
+            language: 'en-US',
+            pitch: 1.0,
+            rate: 0.9,
+            volume: 1.0, // Maximum volume
+            onDone: () => {
+              console.log('Exercise name announcement completed');
+            },
+            onStopped: () => {
+              console.log('Exercise name announcement stopped');
+            },
+            onError: (error) => {
+              console.error('Speech error:', error);
+            },
+          });
+          exerciseAnnouncedRef.current = true;
+        } catch (error) {
+          console.error('Failed to speak exercise name:', error);
+        }
+      }
+    }
+    
+    // Reset announcement flag when exercise changes
+    return () => {
+      if (isResting) {
+        exerciseAnnouncedRef.current = false;
+      }
+    };
+  }, [currentExerciseIndex, isResting, exercises]);
 
   // Fetch user weight for accurate calorie calculations
   useEffect(() => {
@@ -120,13 +180,57 @@ export default function WorkoutStartScreen({ route, navigation }) {
     }
   }, [workoutCompleted]);
 
-  // Timer logic
+  // Timer logic with voice countdown
   useEffect(() => {
     if (isPlaying && timeRemaining > 0) {
+      // Voice countdown from 10 to 0
+      if (timeRemaining <= 10 && timeRemaining > 0 && !isResting) {
+        // Only announce if we haven't announced this second yet
+        if (lastAnnouncedTimeRef.current !== timeRemaining) {
+          try {
+            Speech.speak(timeRemaining.toString(), {
+              language: 'en-US',
+              pitch: 1.2,
+              rate: 0.8,
+              volume: 1.0, // Maximum volume
+              onDone: () => {
+                console.log(`Countdown ${timeRemaining} announced`);
+              },
+              onError: (error) => {
+                console.error('Countdown speech error:', error);
+              },
+            });
+            lastAnnouncedTimeRef.current = timeRemaining;
+          } catch (error) {
+            console.error('Failed to speak countdown:', error);
+          }
+        }
+      }
+      
       timerRef.current = setTimeout(() => {
         setTimeRemaining(time => time - 1);
       }, 1000);
     } else if (isPlaying && timeRemaining === 0) {
+      // Announce "zero" or "time's up" when timer reaches 0
+      if (!isResting && lastAnnouncedTimeRef.current !== 0) {
+        try {
+          Speech.speak('Time\'s up', {
+            language: 'en-US',
+            pitch: 1.0,
+            rate: 0.9,
+            volume: 1.0, // Maximum volume
+            onDone: () => {
+              console.log('Time\'s up announcement completed');
+            },
+            onError: (error) => {
+              console.error('Time\'s up speech error:', error);
+            },
+          });
+          lastAnnouncedTimeRef.current = 0;
+        } catch (error) {
+          console.error('Failed to speak time\'s up:', error);
+        }
+      }
       handleTimerComplete();
     }
 
@@ -135,7 +239,7 @@ export default function WorkoutStartScreen({ route, navigation }) {
         clearTimeout(timerRef.current);
       }
     };
-  }, [isPlaying, timeRemaining, handleTimerComplete]);
+  }, [isPlaying, timeRemaining, handleTimerComplete, isResting]);
 
   // Pulse animation for timer
   useEffect(() => {
@@ -173,6 +277,9 @@ export default function WorkoutStartScreen({ route, navigation }) {
   }, [timeRemaining, getCurrentExercise, progressAnim]);
 
   const handleTimerComplete = useCallback(() => {
+    // Reset countdown announcement ref when timer completes
+    lastAnnouncedTimeRef.current = null;
+    
     if (isResting) {
       // Rest complete, move to next exercise or round
       let nextExerciseIndex = currentExerciseIndex + 1;
@@ -197,6 +304,7 @@ export default function WorkoutStartScreen({ route, navigation }) {
         const nextExercise = exercises[nextExerciseIndex];
         setTimeRemaining(parseInt(nextExercise.duration) || 45);
         setIsPlaying(true);
+        exerciseAnnouncedRef.current = false; // Reset for new exercise announcement
       } else {
         // All exercises in current round completed, check if we need to start next round
         const maxRounds = Math.max(...exercises.map(ex => ex.rounds || 1));
@@ -225,6 +333,7 @@ export default function WorkoutStartScreen({ route, navigation }) {
             const firstExercise = exercises[firstExerciseIndex];
             setTimeRemaining(parseInt(firstExercise.duration) || 45);
             setIsPlaying(true);
+            exerciseAnnouncedRef.current = false; // Reset for new exercise announcement
           } else {
             // No exercises have more rounds
             completeWorkout();
@@ -241,6 +350,8 @@ export default function WorkoutStartScreen({ route, navigation }) {
       setIsResting(true);
       setTimeRemaining(parseInt(currentExercise.rest) || 15);
       setIsPlaying(true);
+      exerciseAnnouncedRef.current = false; // Reset for next exercise
+      lastAnnouncedTimeRef.current = null; // Reset countdown announcement
     }
   }, [isResting, currentExerciseIndex, exercises, currentRound, completeWorkout]);
 

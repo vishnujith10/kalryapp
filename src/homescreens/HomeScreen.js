@@ -451,14 +451,37 @@ const HomeScreen = ({ navigation }) => {
     setWeekDates(getCurrentWeekDates());
   }, []);
 
-  // Handle date changes - force data refresh when selectedDate changes
+  // Handle date changes - check cache first, don't clear state until new data arrives
   useEffect(() => {
-    if (user && user.id && selectedDate) {
-      // Clear cache and fetch fresh data for the new date
+    if (!user?.id || !selectedDate) return;
+    
+    const dateKey = selectedDate.toISOString().split('T')[0];
+    const now = Date.now();
+    const timeSinceLastFetch = now - globalHomeCache.lastFetchTime;
+    const isFresh = timeSinceLastFetch < globalHomeCache.CACHE_DURATION;
+    
+    // Check if we have cached data for this specific date
+    const cachedDataForDate = globalHomeCache.cachedData && globalHomeCache.cachedData.dateKey === dateKey;
+    
+    // If cache is valid for this date, restore from cache immediately (no flash of empty)
+    if (cachedDataForDate && isFresh) {
+      setFoodLogs(globalHomeCache.cachedData.foodLogs || []);
+      setTotals(globalHomeCache.cachedData.totals || { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+      setRecentMeals(globalHomeCache.cachedData.recentMeals || []);
+      return; // Cache is valid, no fetch needed
+    }
+    
+    // If cache is for different date, invalidate it but DON'T clear state yet
+    // Keep showing old data while fetching new data (prevents flash of empty)
+    if (globalHomeCache.cachedData && globalHomeCache.cachedData.dateKey !== dateKey) {
+      // Invalidate cache for the old date, but keep state until new data arrives
       globalHomeCache.cachedData = null;
       globalHomeCache.lastFetchTime = 0;
-      fetchFoodLogs(selectedDate);
     }
+    
+    // Fetch fresh data - state will be updated when fetch completes
+    fetchFoodLogs(selectedDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, user?.id]);
   
   // Handle back button - always navigate to MainDashboardScreen
@@ -474,41 +497,98 @@ const HomeScreen = ({ navigation }) => {
     }, [navigation])
   );
 
-  // Use useFocusEffect with cache - Fixed to properly handle date changes
+  // Use useFocusEffect with cache - Fixed to properly handle navigation (like MainDashboardScreen)
   useFocusEffect(
     React.useCallback(() => {
-      if (user && user.id && selectedDate) {
-        // Clear cache when returning to screen to force fresh data fetch
+      if (!user?.id || !selectedDate) return;
+      
+      const dateKey = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+      
+      const now = Date.now();
+      const timeSinceLastFetch = now - globalHomeCache.lastFetchTime;
+      const isStale = timeSinceLastFetch > globalHomeCache.STALE_TIME;
+      const isFresh = timeSinceLastFetch < globalHomeCache.CACHE_DURATION;
+      
+      // Check if cached data is for the current date
+      const cachedDataForDate = globalHomeCache.cachedData && globalHomeCache.cachedData.dateKey === dateKey;
+      
+      // If cache is for different date, invalidate it but DON'T clear state
+      // Keep showing old data while fetching new data (prevents flash of empty)
+      if (globalHomeCache.cachedData && globalHomeCache.cachedData.dateKey !== dateKey) {
         globalHomeCache.cachedData = null;
         globalHomeCache.lastFetchTime = 0;
-        fetchFoodLogs(selectedDate);
+      }
+      
+      // SWR Pattern: Stale-While-Revalidate (like Instagram/MainDashboardScreen)
+      // ONLY use cache if it's for the EXACT same date
+      if (cachedDataForDate && isFresh) {
+        // Data is fresh for this date - restore from cache immediately, no revalidation needed
+        setFoodLogs(globalHomeCache.cachedData.foodLogs || []);
+        setTotals(globalHomeCache.cachedData.totals || { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+        setRecentMeals(globalHomeCache.cachedData.recentMeals || []);
+        globalHomeCache.cacheHits++;
         
-        // Fetch comprehensive calories burned
+        // Still fetch calories burned and streak (these are lightweight)
         fetchCaloriesBurned();
-        
-        // Reload streak with caching to prevent unnecessary re-fetches
         const loadStreak = async () => {
           try {
-            const now = Date.now();
-            const timeSinceLastFetch = now - streakCache.lastFetch;
+            const streakNow = Date.now();
+            const streakTimeSinceLastFetch = streakNow - streakCache.lastFetch;
             
-            // Use cached streak if it's fresh (within 30 seconds)
-            if (streakCache.cachedStreak !== null && timeSinceLastFetch < streakCache.CACHE_DURATION) {
+            if (streakCache.cachedStreak !== null && streakTimeSinceLastFetch < streakCache.CACHE_DURATION) {
               setCalorieStreak(streakCache.cachedStreak);
               return;
             }
             
-            // Fetch fresh streak
             const currentStreak = await getFoodStreak(user.id);
             streakCache.cachedStreak = currentStreak;
-            streakCache.lastFetch = now;
+            streakCache.lastFetch = streakNow;
             setCalorieStreak(currentStreak);
           } catch (error) {
             console.error('Error loading streak:', error);
           }
         };
         loadStreak();
+        return; // Fresh cache - no fetch needed
       }
+      
+      if (cachedDataForDate && isStale && !isFresh) {
+        // Data is stale but within cache duration - show stale data immediately, revalidate in background
+        setFoodLogs(globalHomeCache.cachedData.foodLogs || []);
+        setTotals(globalHomeCache.cachedData.totals || { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+        setRecentMeals(globalHomeCache.cachedData.recentMeals || []);
+        globalHomeCache.cacheHits++;
+        // Continue to fetch fresh data in background (don't return)
+      }
+      
+      // Prevent concurrent fetches
+      if (globalHomeCache.isFetching) return;
+      
+      // Cache is invalid, missing, or for different date - fetch fresh data
+      // State will be updated when fetch completes (no flash of empty)
+      fetchFoodLogs(selectedDate);
+      fetchCaloriesBurned();
+      
+      // Reload streak with caching
+      const loadStreak = async () => {
+        try {
+          const streakNow = Date.now();
+          const streakTimeSinceLastFetch = streakNow - streakCache.lastFetch;
+          
+          if (streakCache.cachedStreak !== null && streakTimeSinceLastFetch < streakCache.CACHE_DURATION) {
+            setCalorieStreak(streakCache.cachedStreak);
+            return;
+          }
+          
+          const currentStreak = await getFoodStreak(user.id);
+          streakCache.cachedStreak = currentStreak;
+          streakCache.lastFetch = streakNow;
+          setCalorieStreak(currentStreak);
+        } catch (error) {
+          console.error('Error loading streak:', error);
+        }
+      };
+      loadStreak();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id, selectedDate])
   );
@@ -539,7 +619,12 @@ const HomeScreen = ({ navigation }) => {
   const fetchFoodLogs = async (date) => {
     // Create a unique cache key for each date
     const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const cacheKey = `foodLogs_${dateKey}`;
+    
+    // CRITICAL: If cache is for a different date, invalidate it immediately
+    if (globalHomeCache.cachedData && globalHomeCache.cachedData.dateKey !== dateKey) {
+      globalHomeCache.cachedData = null;
+      globalHomeCache.lastFetchTime = 0;
+    }
     
     const now = Date.now();
     const timeSinceLastFetch = now - globalHomeCache.lastFetchTime;
@@ -550,6 +635,7 @@ const HomeScreen = ({ navigation }) => {
     const cachedDataForDate = globalHomeCache.cachedData && globalHomeCache.cachedData.dateKey === dateKey;
     
     // SWR Pattern: Stale-While-Revalidate (like Instagram)
+    // ONLY use cache if it's for the EXACT same date
     if (cachedDataForDate && isFresh) {
       // Data is fresh for this date - use cache, no revalidation needed
       setFoodLogs(globalHomeCache.cachedData.foodLogs || []);
@@ -909,9 +995,7 @@ const HomeScreen = ({ navigation }) => {
                 onPress={() => {
                   if (!isFutureDate) {
                     setSelectedDate(d.date);
-                    // Clear cache immediately when date changes
-                    globalHomeCache.cachedData = null;
-                    globalHomeCache.lastFetchTime = 0;
+                    // Don't clear cache here - let useEffect handle it with proper cache validation
                   }
                 }}
                 style={{ alignItems: "center", flex: 1 }}

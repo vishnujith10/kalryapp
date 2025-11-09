@@ -18,8 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import supabase from "../lib/supabase";
 
-// Use environment variables directly (from eas.json in production)
-const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || Constants.expoConfig?.extra?.EXPO_PUBLIC_GEMINI_API_KEY || "AIzaSyAJ4Df1p8dHhI88h72aG5CHY5rBFEJBWPQ";
+// Use environment variables directly (from eas.json in production or EAS Secrets)
+const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || Constants.expoConfig?.extra?.EXPO_PUBLIC_GEMINI_API_KEY;
 
 // Debug logging
 console.log('QuickLogScreen - API Key:', apiKey ? 'Found' : 'Missing');
