@@ -42,16 +42,17 @@ const COLORS = {
   warning: '#F59E0B',
 };
 
+// Global cache for AppSettingsScreen (same pattern as StepTrackerScreen)
+const globalSettingsCache = {
+  lastFetchTime: 0,
+  CACHE_DURATION: 300000, // 5 minutes
+  cachedData: null,
+};
+
 const AppSettingsScreen = () => {
   const navigation = useNavigation();
   
-  // Notifications State
-  const [dailyReminders, setDailyReminders] = useState(false);
-  const [mealReminders, setMealReminders] = useState(false);
-  const [workoutReminders, setWorkoutReminders] = useState(false);
-  const [sleepReminders, setSleepReminders] = useState(false);
-  
-  // Time picker states - Initialize with default times
+  // Helper functions for default times (moved outside to prevent re-creation)
   const getDefaultMealTime = () => {
     const date = new Date();
     date.setHours(8, 0, 0, 0);
@@ -69,10 +70,40 @@ const AppSettingsScreen = () => {
     date.setHours(22, 0, 0, 0);
     return date;
   };
+
+  // Initialize state from cache if valid (prevent re-render on mount)
+  const getCachedOrDefault = (key, defaultValue) => {
+    const now = Date.now();
+    const timeSinceLastFetch = now - globalSettingsCache.lastFetchTime;
+    const isCacheValid = timeSinceLastFetch < globalSettingsCache.CACHE_DURATION;
+    
+    if (isCacheValid && globalSettingsCache.cachedData && globalSettingsCache.cachedData[key] !== undefined) {
+      return globalSettingsCache.cachedData[key];
+    }
+    return defaultValue;
+  };
   
-  const [mealReminderTime, setMealReminderTime] = useState(getDefaultMealTime());
-  const [workoutReminderTime, setWorkoutReminderTime] = useState(getDefaultWorkoutTime());
-  const [sleepReminderTime, setSleepReminderTime] = useState(getDefaultSleepTime());
+  // Notifications State - Initialize from cache if available
+  const [dailyReminders, setDailyReminders] = useState(() => getCachedOrDefault('dailyReminders', false));
+  const [mealReminders, setMealReminders] = useState(() => getCachedOrDefault('mealReminders', false));
+  const [workoutReminders, setWorkoutReminders] = useState(() => getCachedOrDefault('workoutReminders', false));
+  const [sleepReminders, setSleepReminders] = useState(() => getCachedOrDefault('sleepReminders', false));
+  
+  // Time picker states - Initialize from cache or defaults
+  const getCachedTime = (key, defaultFn) => {
+    const cached = getCachedOrDefault(key, null);
+    if (cached) {
+      const date = new Date();
+      const [hours, minutes] = cached.split(':');
+      date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      return date;
+    }
+    return defaultFn();
+  };
+  
+  const [mealReminderTime, setMealReminderTime] = useState(() => getCachedTime('mealReminderTime', getDefaultMealTime));
+  const [workoutReminderTime, setWorkoutReminderTime] = useState(() => getCachedTime('workoutReminderTime', getDefaultWorkoutTime));
+  const [sleepReminderTime, setSleepReminderTime] = useState(() => getCachedTime('sleepReminderTime', getDefaultSleepTime));
   const [showMealTimePicker, setShowMealTimePicker] = useState(false);
   const [showWorkoutTimePicker, setShowWorkoutTimePicker] = useState(false);
   const [showSleepTimePicker, setShowSleepTimePicker] = useState(false);
@@ -87,21 +118,245 @@ const AppSettingsScreen = () => {
   // Track if this is initial mount (to prevent scheduling on mount)
   const isInitialMount = useRef(true);
   
-  // AI Insights State
-  const [aiInsights, setAiInsights] = useState(true);
-  const [insightFrequency, setInsightFrequency] = useState('Weekly');
-  const [focusAreas, setFocusAreas] = useState({
+  // AI Insights State - Initialize from cache
+  const [aiInsights, setAiInsights] = useState(() => getCachedOrDefault('aiInsights', true));
+  const [insightFrequency, setInsightFrequency] = useState(() => getCachedOrDefault('insightFrequency', 'Weekly'));
+  const [focusAreas, setFocusAreas] = useState(() => getCachedOrDefault('focusAreas', {
     calories: true,
     sleep: true,
     workout: true,
     Hydration: false,
-  });
+  }));
   
-  // Privacy & Data State
-  const [anonymousDataSharing, setAnonymousDataSharing] = useState(true);
+  // Privacy & Data State - Initialize from cache
+  const [anonymousDataSharing, setAnonymousDataSharing] = useState(() => getCachedOrDefault('anonymousDataSharing', true));
   
-  // General State
-  const [language, setLanguage] = useState('English');
+  // General State - Initialize from cache
+  const [language, setLanguage] = useState(() => getCachedOrDefault('language', 'English'));
+
+  // Load settings from database
+  const loadSettings = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Check cache first (prevent unnecessary re-renders)
+      const now = Date.now();
+      const timeSinceLastFetch = now - globalSettingsCache.lastFetchTime;
+      const isCacheValid = timeSinceLastFetch < globalSettingsCache.CACHE_DURATION;
+
+      if (isCacheValid && globalSettingsCache.cachedData) {
+        // Cache is valid, restore from cache without fetching
+        const cached = globalSettingsCache.cachedData;
+        
+        // Only update state if values actually changed (prevent unnecessary re-renders)
+        if (dailyReminders !== cached.dailyReminders) setDailyReminders(cached.dailyReminders);
+        if (mealReminders !== cached.mealReminders) setMealReminders(cached.mealReminders);
+        if (workoutReminders !== cached.workoutReminders) setWorkoutReminders(cached.workoutReminders);
+        if (sleepReminders !== cached.sleepReminders) setSleepReminders(cached.sleepReminders);
+        
+        if (cached.mealReminderTime && mealReminderTime.toTimeString().slice(0, 5) !== cached.mealReminderTime) {
+          const [hours, minutes] = cached.mealReminderTime.split(':');
+          const mealTime = new Date();
+          mealTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          setMealReminderTime(mealTime);
+        }
+        if (cached.workoutReminderTime && workoutReminderTime.toTimeString().slice(0, 5) !== cached.workoutReminderTime) {
+          const [hours, minutes] = cached.workoutReminderTime.split(':');
+          const workoutTime = new Date();
+          workoutTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          setWorkoutReminderTime(workoutTime);
+        }
+        if (cached.sleepReminderTime && sleepReminderTime.toTimeString().slice(0, 5) !== cached.sleepReminderTime) {
+          const [hours, minutes] = cached.sleepReminderTime.split(':');
+          const sleepTime = new Date();
+          sleepTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          setSleepReminderTime(sleepTime);
+        }
+        
+        if (aiInsights !== cached.aiInsights) setAiInsights(cached.aiInsights);
+        if (insightFrequency !== cached.insightFrequency) setInsightFrequency(cached.insightFrequency);
+        if (JSON.stringify(focusAreas) !== JSON.stringify(cached.focusAreas)) {
+          setFocusAreas(cached.focusAreas);
+        }
+        if (anonymousDataSharing !== cached.anonymousDataSharing) setAnonymousDataSharing(cached.anonymousDataSharing);
+        if (language !== cached.language) setLanguage(cached.language);
+        
+        return; // Skip database fetch
+      }
+
+      // Cache invalid or doesn't exist, fetch from database
+      const { data, error } = await supabase
+        .from('user_app_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error loading settings:', error);
+        return;
+      }
+
+      if (data) {
+        // Update cache
+        globalSettingsCache.cachedData = {
+          dailyReminders: data.daily_reminders ?? false,
+          mealReminders: data.meal_reminders ?? false,
+          workoutReminders: data.workout_reminders ?? false,
+          sleepReminders: data.sleep_reminders ?? false,
+          mealReminderTime: data.meal_reminder_time,
+          workoutReminderTime: data.workout_reminder_time,
+          sleepReminderTime: data.sleep_reminder_time,
+          aiInsights: data.ai_insights ?? true,
+          insightFrequency: data.insight_frequency ?? 'Weekly',
+          focusAreas: data.focus_areas || {
+            calories: true,
+            sleep: true,
+            workout: true,
+            Hydration: false,
+          },
+          anonymousDataSharing: data.anonymous_data_sharing ?? true,
+          language: data.language ?? 'English',
+        };
+        globalSettingsCache.lastFetchTime = now;
+
+        // Only update state if values changed (prevent unnecessary re-renders)
+        if (dailyReminders !== globalSettingsCache.cachedData.dailyReminders) {
+          setDailyReminders(globalSettingsCache.cachedData.dailyReminders);
+        }
+        if (mealReminders !== globalSettingsCache.cachedData.mealReminders) {
+          setMealReminders(globalSettingsCache.cachedData.mealReminders);
+        }
+        if (workoutReminders !== globalSettingsCache.cachedData.workoutReminders) {
+          setWorkoutReminders(globalSettingsCache.cachedData.workoutReminders);
+        }
+        if (sleepReminders !== globalSettingsCache.cachedData.sleepReminders) {
+          setSleepReminders(globalSettingsCache.cachedData.sleepReminders);
+        }
+
+        // Load reminder times
+        if (data.meal_reminder_time) {
+          const [hours, minutes] = data.meal_reminder_time.split(':');
+          const mealTime = new Date();
+          mealTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          if (mealReminderTime.toTimeString().slice(0, 5) !== data.meal_reminder_time) {
+            setMealReminderTime(mealTime);
+          }
+        }
+        if (data.workout_reminder_time) {
+          const [hours, minutes] = data.workout_reminder_time.split(':');
+          const workoutTime = new Date();
+          workoutTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          if (workoutReminderTime.toTimeString().slice(0, 5) !== data.workout_reminder_time) {
+            setWorkoutReminderTime(workoutTime);
+          }
+        }
+        if (data.sleep_reminder_time) {
+          const [hours, minutes] = data.sleep_reminder_time.split(':');
+          const sleepTime = new Date();
+          sleepTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          if (sleepReminderTime.toTimeString().slice(0, 5) !== data.sleep_reminder_time) {
+            setSleepReminderTime(sleepTime);
+          }
+        }
+
+        // Load AI Insights settings
+        if (aiInsights !== globalSettingsCache.cachedData.aiInsights) {
+          setAiInsights(globalSettingsCache.cachedData.aiInsights);
+        }
+        if (insightFrequency !== globalSettingsCache.cachedData.insightFrequency) {
+          setInsightFrequency(globalSettingsCache.cachedData.insightFrequency);
+        }
+        if (JSON.stringify(focusAreas) !== JSON.stringify(globalSettingsCache.cachedData.focusAreas)) {
+          setFocusAreas(globalSettingsCache.cachedData.focusAreas);
+        }
+
+        // Load Privacy & Data settings
+        if (anonymousDataSharing !== globalSettingsCache.cachedData.anonymousDataSharing) {
+          setAnonymousDataSharing(globalSettingsCache.cachedData.anonymousDataSharing);
+        }
+
+        // Load General settings
+        if (language !== globalSettingsCache.cachedData.language) {
+          setLanguage(globalSettingsCache.cachedData.language);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  }, [dailyReminders, mealReminders, workoutReminders, sleepReminders, mealReminderTime, workoutReminderTime, sleepReminderTime, aiInsights, insightFrequency, focusAreas, anonymousDataSharing, language]);
+
+  // Save settings to database
+  const saveSettings = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const mealTimeStr = mealReminderTime.toTimeString().slice(0, 5);
+      const workoutTimeStr = workoutReminderTime.toTimeString().slice(0, 5);
+      const sleepTimeStr = sleepReminderTime.toTimeString().slice(0, 5);
+
+      const settingsData = {
+        user_id: user.id,
+        daily_reminders: dailyReminders,
+        meal_reminders: mealReminders,
+        workout_reminders: workoutReminders,
+        sleep_reminders: sleepReminders,
+        meal_reminder_time: mealTimeStr,
+        workout_reminder_time: workoutTimeStr,
+        sleep_reminder_time: sleepTimeStr,
+        ai_insights: aiInsights,
+        insight_frequency: insightFrequency,
+        focus_areas: focusAreas,
+        anonymous_data_sharing: anonymousDataSharing,
+        language: language,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('user_app_settings')
+        .upsert(settingsData, {
+          onConflict: 'user_id',
+        });
+
+      if (error) {
+        console.error('Error saving settings:', error);
+      } else {
+        // Update cache after successful save
+        globalSettingsCache.cachedData = {
+          dailyReminders,
+          mealReminders,
+          workoutReminders,
+          sleepReminders,
+          mealReminderTime: mealTimeStr,
+          workoutReminderTime: workoutTimeStr,
+          sleepReminderTime: sleepTimeStr,
+          aiInsights,
+          insightFrequency,
+          focusAreas,
+          anonymousDataSharing,
+          language,
+        };
+        globalSettingsCache.lastFetchTime = Date.now();
+        console.log('✅ Settings saved successfully');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  }, [
+    dailyReminders,
+    mealReminders,
+    workoutReminders,
+    sleepReminders,
+    mealReminderTime,
+    workoutReminderTime,
+    sleepReminderTime,
+    aiInsights,
+    insightFrequency,
+    focusAreas,
+    anonymousDataSharing,
+    language,
+  ]);
 
   // Request notification permissions and setup Android channel
   useEffect(() => {
@@ -138,6 +393,11 @@ const AppSettingsScreen = () => {
       isInitialMount.current = false;
     }, 1000);
   }, []);
+
+  // Load settings on mount (like StepTrackerScreen - no useFocusEffect)
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   // Notification messages
   const getNotificationMessages = (type) => {
@@ -281,10 +541,12 @@ const AppSettingsScreen = () => {
       } else {
         await cancelNotification('meal');
       }
+      // Save settings to database
+      await saveSettings();
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [mealReminders, dailyReminders]);
+  }, [mealReminders, dailyReminders, saveSettings]);
 
   // Handle meal time changes (only reschedule if already enabled)
   useEffect(() => {
@@ -295,10 +557,12 @@ const AppSettingsScreen = () => {
         console.log('⏰ Meal time changed, rescheduling...');
         await scheduleNotification('meal', mealReminderTime, true);
       }
+      // Save settings to database
+      await saveSettings();
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [mealReminderTime]);
+  }, [mealReminderTime, saveSettings]);
 
   // Handle workout reminders toggle
   useEffect(() => {
@@ -310,10 +574,12 @@ const AppSettingsScreen = () => {
       } else {
         await cancelNotification('workout');
       }
+      // Save settings to database
+      await saveSettings();
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [workoutReminders, dailyReminders]);
+  }, [workoutReminders, dailyReminders, saveSettings]);
 
   // Handle workout time changes
   useEffect(() => {
@@ -324,10 +590,12 @@ const AppSettingsScreen = () => {
         console.log('⏰ Workout time changed, rescheduling...');
         await scheduleNotification('workout', workoutReminderTime, true);
       }
+      // Save settings to database
+      await saveSettings();
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [workoutReminderTime]);
+  }, [workoutReminderTime, saveSettings]);
 
   // Handle sleep reminders toggle
   useEffect(() => {
@@ -339,10 +607,12 @@ const AppSettingsScreen = () => {
       } else {
         await cancelNotification('sleep');
       }
+      // Save settings to database
+      await saveSettings();
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [sleepReminders, dailyReminders]);
+  }, [sleepReminders, dailyReminders, saveSettings]);
 
   // Handle sleep time changes
   useEffect(() => {
@@ -353,10 +623,12 @@ const AppSettingsScreen = () => {
         console.log('⏰ Sleep time changed, rescheduling...');
         await scheduleNotification('sleep', sleepReminderTime, true);
       }
+      // Save settings to database
+      await saveSettings();
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [sleepReminderTime]);
+  }, [sleepReminderTime, saveSettings]);
 
   const handleFocusAreaToggle = (area) => {
     setFocusAreas(prev => ({
@@ -364,6 +636,28 @@ const AppSettingsScreen = () => {
       [area]: !prev[area]
     }));
   };
+
+  // Handle daily reminders toggle - save to database
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
+    const timeoutId = setTimeout(async () => {
+      await saveSettings();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [dailyReminders, saveSettings]);
+
+  // Save settings when AI Insights, focus areas, or other preferences change
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
+    const timeoutId = setTimeout(async () => {
+      await saveSettings();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [aiInsights, insightFrequency, focusAreas, anonymousDataSharing, language, saveSettings]);
 
   const handleDailyRemindersToggle = (value) => {
     setDailyReminders(value);
@@ -781,7 +1075,6 @@ const AppSettingsScreen = () => {
 
           {renderSection('AI Insights', (
             <View style={styles.sectionContent}>
-              {renderToggleItem('Enable AI Insights', aiInsights, setAiInsights)}
               
               <View style={styles.infoRow}>
                 <Ionicons name="information-circle-outline" size={16} color={COLORS.textMuted} />
@@ -1093,4 +1386,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AppSettingsScreen;
+// Wrap with React.memo to prevent unnecessary re-renders (same pattern as StepTrackerScreen)
+export default React.memo(AppSettingsScreen, (prevProps, nextProps) => {
+  return prevProps.navigation === nextProps.navigation;
+});
