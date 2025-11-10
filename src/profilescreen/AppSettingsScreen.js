@@ -66,7 +66,7 @@ const AppSettingsScreen = () => {
   
   const getDefaultSleepTime = () => {
     const date = new Date();
-    date.setHours(22, 0, 0, 0); // Default 10:00 PM
+    date.setHours(22, 0, 0, 0);
     return date;
   };
   
@@ -84,6 +84,9 @@ const AppSettingsScreen = () => {
     sleep: null,
   });
   
+  // Track if this is initial mount (to prevent scheduling on mount)
+  const isInitialMount = useRef(true);
+  
   // AI Insights State
   const [aiInsights, setAiInsights] = useState(true);
   const [insightFrequency, setInsightFrequency] = useState('Weekly');
@@ -100,7 +103,7 @@ const AppSettingsScreen = () => {
   // General State
   const [language, setLanguage] = useState('English');
 
-  // Request notification permissions
+  // Request notification permissions and setup Android channel
   useEffect(() => {
     const requestPermissions = async () => {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -113,10 +116,27 @@ const AppSettingsScreen = () => {
       
       if (finalStatus !== 'granted') {
         console.log('Notification permissions not granted');
+        return;
+      }
+      
+      // Setup Android notification channel
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+          sound: 'default',
+        });
       }
     };
     
     requestPermissions();
+    
+    // Mark that initial mount is complete after a short delay
+    setTimeout(() => {
+      isInitialMount.current = false;
+    }, 1000);
   }, []);
 
   // Notification messages
@@ -160,7 +180,7 @@ const AppSettingsScreen = () => {
     }
   }, []);
 
-  // Schedule daily recurring notification
+  // Schedule daily recurring notification - FIXED to prevent immediate firing
   const scheduleNotification = useCallback(async (type, time, enabled) => {
     try {
       // Cancel existing notification first
@@ -173,12 +193,23 @@ const AppSettingsScreen = () => {
       const hours = time.getHours();
       const minutes = time.getMinutes();
       
-      const trigger = {
-        hour: hours,
-        minute: minutes,
-        repeats: true,
-      };
-
+      // Calculate when to fire the notification
+      const now = new Date();
+      const scheduledTime = new Date();
+      scheduledTime.setHours(hours, minutes, 0, 0);
+      
+      // If the time has already passed today, schedule for tomorrow
+      if (scheduledTime.getTime() <= now.getTime()) {
+        scheduledTime.setDate(scheduledTime.getDate() + 1);
+        console.log(`⏰ Time ${hours}:${minutes} has passed today. Scheduling for tomorrow.`);
+      }
+      
+      // Calculate seconds until the scheduled time
+      const secondsUntilScheduled = Math.floor((scheduledTime.getTime() - now.getTime()) / 1000);
+      
+      console.log(`⏰ Scheduling ${type} notification in ${secondsUntilScheduled} seconds (${Math.floor(secondsUntilScheduled / 60)} minutes) at ${scheduledTime.toLocaleTimeString()}`);
+      
+      // Use specific date/time trigger (most reliable)
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: type === 'meal' ? 'Meal Reminder' : type === 'workout' ? 'Workout Reminder' : 'Sleep Reminder',
@@ -186,48 +217,146 @@ const AppSettingsScreen = () => {
           sound: true,
           priority: Notifications.AndroidNotificationPriority.HIGH,
         },
-        trigger,
+        trigger: scheduledTime, // Simple date trigger
       });
-
+      
       // Store notification ID
       notificationIdsRef.current[type] = notificationId;
-      console.log(`✅ Scheduled ${type} notification at ${hours}:${minutes.toString().padStart(2, '0')}`);
+      console.log(`✅ Scheduled ${type} notification for ${scheduledTime.toLocaleString()} (ID: ${notificationId})`);
+      
+      // Debug: Check all scheduled notifications
+      if (__DEV__) {
+        const allScheduled = await Notifications.getAllScheduledNotificationsAsync();
+        console.log('📅 Total scheduled notifications:', allScheduled.length);
+        allScheduled.forEach(notif => {
+          console.log(`  - ${notif.content.title}: ${JSON.stringify(notif.trigger)}`);
+        });
+      }
     } catch (error) {
       console.error(`Error scheduling ${type} notification:`, error);
     }
   }, [cancelNotification]);
 
-  // Update all notifications when states change
+  // Cleanup on unmount
   useEffect(() => {
-    const updateNotifications = async () => {
-      if (dailyReminders) {
-        if (mealReminders) {
-          await scheduleNotification('meal', mealReminderTime, true);
-        } else {
-          await cancelNotification('meal');
-        }
-        
-        if (workoutReminders) {
-          await scheduleNotification('workout', workoutReminderTime, true);
-        } else {
-          await cancelNotification('workout');
-        }
-        
-        if (sleepReminders) {
-          await scheduleNotification('sleep', sleepReminderTime, true);
-        } else {
-          await cancelNotification('sleep');
-        }
+    return () => {
+      cancelNotification('meal');
+      cancelNotification('workout');
+      cancelNotification('sleep');
+    };
+  }, [cancelNotification]);
+
+  // Handle notification received (reschedule for next day)
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(async (notification) => {
+      console.log('📬 Notification received:', notification.request.content.title);
+      
+      // Determine which type and reschedule for tomorrow
+      const title = notification.request.content.title;
+      
+      if (title?.includes('Meal') && mealReminders && dailyReminders) {
+        console.log('🔄 Rescheduling meal notification for tomorrow');
+        await scheduleNotification('meal', mealReminderTime, true);
+      } else if (title?.includes('Workout') && workoutReminders && dailyReminders) {
+        console.log('🔄 Rescheduling workout notification for tomorrow');
+        await scheduleNotification('workout', workoutReminderTime, true);
+      } else if (title?.includes('Sleep') && sleepReminders && dailyReminders) {
+        console.log('🔄 Rescheduling sleep notification for tomorrow');
+        await scheduleNotification('sleep', sleepReminderTime, true);
+      }
+    });
+    
+    return () => subscription.remove();
+  }, [mealReminders, workoutReminders, sleepReminders, dailyReminders, mealReminderTime, workoutReminderTime, sleepReminderTime, scheduleNotification]);
+
+  // SEPARATE useEffects for each notification type to prevent cascade updates
+  
+  // Handle meal reminders toggle
+  useEffect(() => {
+    if (isInitialMount.current) return; // Skip on initial mount
+    
+    const timeoutId = setTimeout(async () => {
+      if (dailyReminders && mealReminders) {
+        await scheduleNotification('meal', mealReminderTime, true);
       } else {
-        // Cancel all notifications if daily reminders is off
         await cancelNotification('meal');
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [mealReminders, dailyReminders]);
+
+  // Handle meal time changes (only reschedule if already enabled)
+  useEffect(() => {
+    if (isInitialMount.current) return; // Skip on initial mount
+    
+    const timeoutId = setTimeout(async () => {
+      if (dailyReminders && mealReminders) {
+        console.log('⏰ Meal time changed, rescheduling...');
+        await scheduleNotification('meal', mealReminderTime, true);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [mealReminderTime]);
+
+  // Handle workout reminders toggle
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
+    const timeoutId = setTimeout(async () => {
+      if (dailyReminders && workoutReminders) {
+        await scheduleNotification('workout', workoutReminderTime, true);
+      } else {
         await cancelNotification('workout');
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [workoutReminders, dailyReminders]);
+
+  // Handle workout time changes
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
+    const timeoutId = setTimeout(async () => {
+      if (dailyReminders && workoutReminders) {
+        console.log('⏰ Workout time changed, rescheduling...');
+        await scheduleNotification('workout', workoutReminderTime, true);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [workoutReminderTime]);
+
+  // Handle sleep reminders toggle
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
+    const timeoutId = setTimeout(async () => {
+      if (dailyReminders && sleepReminders) {
+        await scheduleNotification('sleep', sleepReminderTime, true);
+      } else {
         await cancelNotification('sleep');
       }
-    };
+    }, 300);
 
-    updateNotifications();
-  }, [dailyReminders, mealReminders, workoutReminders, sleepReminders, mealReminderTime, workoutReminderTime, sleepReminderTime, scheduleNotification, cancelNotification]);
+    return () => clearTimeout(timeoutId);
+  }, [sleepReminders, dailyReminders]);
+
+  // Handle sleep time changes
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
+    const timeoutId = setTimeout(async () => {
+      if (dailyReminders && sleepReminders) {
+        console.log('⏰ Sleep time changed, rescheduling...');
+        await scheduleNotification('sleep', sleepReminderTime, true);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [sleepReminderTime]);
 
   const handleFocusAreaToggle = (area) => {
     setFocusAreas(prev => ({
@@ -238,7 +367,6 @@ const AppSettingsScreen = () => {
 
   const handleDailyRemindersToggle = (value) => {
     setDailyReminders(value);
-    // If turning off daily reminders, turn off meal, workout, and sleep reminders too
     if (!value) {
       setMealReminders(false);
       setWorkoutReminders(false);
@@ -247,25 +375,22 @@ const AppSettingsScreen = () => {
   };
 
   const handleMealRemindersToggle = (value) => {
-    // Only allow turning on if daily reminders is enabled
     if (value && !dailyReminders) {
-      return; // Don't allow turning on if daily reminders is off
+      return;
     }
     setMealReminders(value);
   };
 
   const handleWorkoutRemindersToggle = (value) => {
-    // Only allow turning on if daily reminders is enabled
     if (value && !dailyReminders) {
-      return; // Don't allow turning on if daily reminders is off
+      return;
     }
     setWorkoutReminders(value);
   };
 
   const handleSleepRemindersToggle = (value) => {
-    // Only allow turning on if daily reminders is enabled
     if (value && !dailyReminders) {
-      return; // Don't allow turning on if daily reminders is off
+      return;
     }
     setSleepReminders(value);
   };
@@ -297,12 +422,10 @@ const AppSettingsScreen = () => {
       setShowWorkoutTimePicker(false);
       if (event.type === 'set' && selectedTime) {
         setWorkoutReminderTime(selectedTime);
-        // Notification will be updated automatically via useEffect
       }
     } else {
       if (selectedTime) {
         setWorkoutReminderTime(selectedTime);
-        // Notification will be updated automatically via useEffect
       }
     }
   };
@@ -312,24 +435,33 @@ const AppSettingsScreen = () => {
       setShowSleepTimePicker(false);
       if (event.type === 'set' && selectedTime) {
         setSleepReminderTime(selectedTime);
-        // Notification will be updated automatically via useEffect
       }
     } else {
       if (selectedTime) {
         setSleepReminderTime(selectedTime);
-        // Notification will be updated automatically via useEffect
       }
     }
   };
 
   const handleDataExport = () => {
-    // TODO: Implement data export functionality
     console.log('Exporting data...');
   };
 
   const handleClearHistory = () => {
-    // TODO: Implement clear history functionality
-    console.log('Clearing history...');
+    Alert.alert(
+      'Clear History',
+      'Are you sure you want to clear all history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => {
+            console.log('Clearing history...');
+          },
+        },
+      ]
+    );
   };
 
   const handleLogout = async () => {
@@ -337,21 +469,21 @@ const AppSettingsScreen = () => {
       'Logout',
       'Are you sure you want to logout?',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
             try {
+              await cancelNotification('meal');
+              await cancelNotification('workout');
+              await cancelNotification('sleep');
+              
               const { error } = await supabase.auth.signOut();
               if (error) {
                 Alert.alert('Error', 'Failed to logout. Please try again.');
                 console.error('Logout error:', error);
               } else {
-                // Navigate to login screen
                 navigation.reset({
                   index: 0,
                   routes: [{ name: 'Login' }],
@@ -374,13 +506,11 @@ const AppSettingsScreen = () => {
     </View>
   );
 
-  // Animated Toggle Item Component
   const AnimatedToggleItem = React.memo(({ label, value, onValueChange, subtitle, disabled, onLabelPress }) => {
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const opacityAnim = useRef(new Animated.Value(1)).current;
 
     const handleToggle = (newValue) => {
-      // Animate on press - smooth scale and opacity transition
       Animated.parallel([
         Animated.sequence([
           Animated.timing(scaleAnim, {
@@ -408,7 +538,6 @@ const AppSettingsScreen = () => {
         ]),
       ]).start();
 
-      // Call the original onValueChange
       onValueChange(newValue);
     };
 
@@ -434,11 +563,7 @@ const AppSettingsScreen = () => {
             <Text style={[styles.settingSubtitle, disabled && styles.settingSubtitleDisabled]}>{subtitle}</Text>
           )}
         </TouchableOpacity>
-        <Animated.View
-          style={{
-            transform: [{ scale: scaleAnim }],
-          }}
-        >
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
           <Switch
             value={value}
             onValueChange={handleToggle}
@@ -463,23 +588,6 @@ const AppSettingsScreen = () => {
       disabled={disabled}
       onLabelPress={onLabelPress}
     />
-  );
-
-  const renderPillButton = (label, isSelected, onPress) => (
-    <TouchableOpacity
-      style={[
-        styles.pillButton,
-        isSelected ? styles.pillButtonSelected : styles.pillButtonUnselected
-      ]}
-      onPress={onPress}
-    >
-      <Text style={[
-        styles.pillButtonText,
-        isSelected ? styles.pillButtonTextSelected : styles.pillButtonTextUnselected
-      ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
   );
 
   const renderPillGroup = (options, selectedValue, onSelect) => (
@@ -511,7 +619,6 @@ const AppSettingsScreen = () => {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity 
               style={styles.backButton}
@@ -523,7 +630,6 @@ const AppSettingsScreen = () => {
             <View style={styles.headerSpacer} />
           </View>
           
-          {/* Notifications Section */}
           {renderSection('Notifications', (
             <View style={styles.sectionContent}>
               {renderToggleItem('Daily Reminders', dailyReminders, handleDailyRemindersToggle)}
@@ -532,29 +638,29 @@ const AppSettingsScreen = () => {
                 mealReminders, 
                 handleMealRemindersToggle, 
                 formatTime(mealReminderTime),
-                !dailyReminders, // Disabled if daily reminders is off
-                !dailyReminders ? null : () => setShowMealTimePicker(true) // Show time picker on text click
+                !dailyReminders,
+                !dailyReminders ? null : () => setShowMealTimePicker(true)
               )}
               {renderToggleItem(
                 'Workout Reminders', 
                 workoutReminders, 
                 handleWorkoutRemindersToggle, 
                 formatTime(workoutReminderTime),
-                !dailyReminders, // Disabled if daily reminders is off
-                !dailyReminders ? null : () => setShowWorkoutTimePicker(true) // Show time picker on text click
+                !dailyReminders,
+                !dailyReminders ? null : () => setShowWorkoutTimePicker(true)
               )}
               {renderToggleItem(
                 'Sleep Reminders', 
                 sleepReminders, 
                 handleSleepRemindersToggle, 
                 formatTime(sleepReminderTime),
-                !dailyReminders, // Disabled if daily reminders is off
-                !dailyReminders ? null : () => setShowSleepTimePicker(true) // Show time picker on text click
+                !dailyReminders,
+                !dailyReminders ? null : () => setShowSleepTimePicker(true)
               )}
             </View>
           ))}
 
-          {/* Time Picker Modals */}
+          {/* Time Picker Modals - iOS */}
           {Platform.OS === 'ios' && (
             <>
               <Modal
@@ -673,7 +779,6 @@ const AppSettingsScreen = () => {
             </>
           )}
 
-          {/* AI Insights Section */}
           {renderSection('AI Insights', (
             <View style={styles.sectionContent}>
               {renderToggleItem('Enable AI Insights', aiInsights, setAiInsights)}
@@ -713,7 +818,6 @@ const AppSettingsScreen = () => {
             </View>
           ))}
 
-          {/* Privacy & Data Section */}
           {renderSection('Privacy & Data', (
             <View style={styles.sectionContent}>
               {renderToggleItem('Anonymous Data Sharing', anonymousDataSharing, setAnonymousDataSharing)}
@@ -739,7 +843,6 @@ const AppSettingsScreen = () => {
             </View>
           ))}
 
-          {/* General Section */}
           {renderSection('General', (
             <View style={styles.sectionContent}>
               <View style={styles.subsection}>
@@ -754,7 +857,6 @@ const AppSettingsScreen = () => {
             </View>
           ))}
 
-          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Kalry App v2.1.0</Text>
           </View>

@@ -1,18 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -87,45 +90,82 @@ const FooterBar = ({ navigation, activeTab }) => {
   );
 };
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Global cache for ProfileScreen (similar to other screens)
+const globalProfileCache = {
+  lastFetchTime: 0,
+  CACHE_DURATION: 300000, // 5 minutes - profile data doesn't change often
+  cachedData: null,
+};
+
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets(); // Get safe area insets for bottom navigation
   const navigation = useNavigation();
-  const [userProfile, setUserProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState(null);
-  const [uploading, setUploading] = useState(false);
   
-  // Fetch profile when screen mounts
+  // Initialize state from cache if available (prevents loading flash)
+  const [userProfile, setUserProfile] = useState(() => {
+    const now = Date.now();
+    const timeSinceLastFetch = now - globalProfileCache.lastFetchTime;
+    const isCacheValid = timeSinceLastFetch < globalProfileCache.CACHE_DURATION;
+    return (isCacheValid && globalProfileCache.cachedData?.userProfile) || null;
+  });
+  
+  const [loading, setLoading] = useState(() => {
+    const now = Date.now();
+    const timeSinceLastFetch = now - globalProfileCache.lastFetchTime;
+    const isCacheValid = timeSinceLastFetch < globalProfileCache.CACHE_DURATION;
+    return !(isCacheValid && globalProfileCache.cachedData); // Only show loading if no valid cache
+  });
+  
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState(() => {
+    const now = Date.now();
+    const timeSinceLastFetch = now - globalProfileCache.lastFetchTime;
+    const isCacheValid = timeSinceLastFetch < globalProfileCache.CACHE_DURATION;
+    return (isCacheValid && globalProfileCache.cachedData?.profilePhotoUrl) || null;
+  });
+  
+  const [uploading, setUploading] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
+  
+  // Load profile data on mount and when needed (like StepTrackerScreen - no useFocusEffect)
   useEffect(() => {
-    fetchUserProfile();
-  }, []);
+    const loadProfile = async () => {
+      const now = Date.now();
+      const timeSinceLastFetch = now - globalProfileCache.lastFetchTime;
+      const isCacheValid = timeSinceLastFetch < globalProfileCache.CACHE_DURATION;
 
-  // Refresh profile photo URL when screen comes into focus (handles expired URLs)
-  // URLs have 10-year expiry, but refresh ensures they're always valid
-  useFocusEffect(
-    useCallback(() => {
-      if (userProfile?.photo_url && !userProfile.photo_url.startsWith('http')) {
-        // Regenerate signed URL if we have a storage path (10 years expiry)
-        const refreshPhotoUrl = async () => {
-          try {
-            const { data: signedUrlData } = await supabase.storage
-              .from('profile-photos')
-              .createSignedUrl(userProfile.photo_url, 60 * 60 * 24 * 365 * 10); // 10 years expiry
-            
-            if (signedUrlData?.signedUrl) {
-              setProfilePhotoUrl(signedUrlData.signedUrl);
-            }
-          } catch (error) {
-            console.error('Error refreshing profile photo URL:', error);
-          }
-        };
-        refreshPhotoUrl();
+      // If cache is valid, restore from cache and skip fetch
+      if (isCacheValid && globalProfileCache.cachedData) {
+        const cached = globalProfileCache.cachedData;
+        
+        // Restore from cache (only update if different to prevent unnecessary re-renders)
+        setUserProfile(prev => {
+          const prevStr = JSON.stringify(prev);
+          const cachedStr = JSON.stringify(cached.userProfile);
+          return prevStr !== cachedStr ? cached.userProfile : prev;
+        });
+        
+        setProfilePhotoUrl(prev => {
+          return prev !== cached.profilePhotoUrl ? cached.profilePhotoUrl : prev;
+        });
+        
+        setLoading(false);
+        return; // Use cached data
       }
-    }, [userProfile?.photo_url])
-  );
+
+      // Cache is stale or doesn't exist - fetch fresh data
+      await fetchUserProfile();
+    };
+
+    loadProfile();
+     
+  }, []); // Only run on mount
   
   const fetchUserProfile = async () => {
     try {
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.error('No authenticated user found');
@@ -150,30 +190,37 @@ const ProfileScreen = () => {
       setLoading(false); // Stop loading immediately after getting profile data
       
       // Fetch profile photo asynchronously (non-blocking)
+      let photoUrl = null;
       if (data.photo_url) {
-        // Don't await - let it load in background
-        (async () => {
-          try {
-            // If it's a storage path, generate a signed URL with very long expiry (10 years)
-            // Keep bucket private for security - signed URLs provide access control
-            if (!data.photo_url.startsWith('http')) {
-              const { data: signedUrlData } = await supabase.storage
-                .from('profile-photos')
-                .createSignedUrl(data.photo_url, 60 * 60 * 24 * 365 * 10); // 10 years expiry (effectively never expires)
-              
-              if (signedUrlData?.signedUrl) {
-                setProfilePhotoUrl(signedUrlData.signedUrl);
-              }
-            } else {
-              // If it's already a full URL, use it directly
-              setProfilePhotoUrl(data.photo_url);
+        try {
+          // If it's a storage path, generate a signed URL with very long expiry (10 years)
+          // Keep bucket private for security - signed URLs provide access control
+          if (!data.photo_url.startsWith('http')) {
+            const { data: signedUrlData } = await supabase.storage
+              .from('profile-photos')
+              .createSignedUrl(data.photo_url, 60 * 60 * 24 * 365 * 10); // 10 years expiry (effectively never expires)
+            
+            if (signedUrlData?.signedUrl) {
+              photoUrl = signedUrlData.signedUrl;
+              setProfilePhotoUrl(photoUrl);
             }
-          } catch (error) {
-            console.error('Error fetching profile photo:', error);
-            // Don't block UI - photo will just not show
+          } else {
+            // If it's already a full URL, use it directly
+            photoUrl = data.photo_url;
+            setProfilePhotoUrl(photoUrl);
           }
-        })();
+        } catch (error) {
+          console.error('Error fetching profile photo:', error);
+          // Don't block UI - photo will just not show
+        }
       }
+
+      // Update cache with fresh data
+      globalProfileCache.cachedData = {
+        userProfile: data,
+        profilePhotoUrl: photoUrl,
+      };
+      globalProfileCache.lastFetchTime = Date.now();
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
       setLoading(false);
@@ -181,6 +228,59 @@ const ProfileScreen = () => {
   };
   
   const handleProfilePhotoPress = async () => {
+    // If we have a profile with photo_url, ensure we have the signed URL
+    if (userProfile?.photo_url) {
+      setImageViewerVisible(true); // Open modal immediately
+      
+      // If we don't have a profilePhotoUrl yet, fetch it
+      if (!profilePhotoUrl) {
+        setImageLoading(true);
+        try {
+          let photoUrl = null;
+          console.log('Fetching photo URL from storage:', userProfile.photo_url);
+          
+          // If it's a storage path, generate a signed URL
+          if (!userProfile.photo_url.startsWith('http')) {
+            const { data: signedUrlData, error: urlError } = await supabase.storage
+              .from('profile-photos')
+              .createSignedUrl(userProfile.photo_url, 60 * 60 * 24 * 365 * 10); // 10 years expiry
+            
+            if (urlError) {
+              console.error('Error creating signed URL:', urlError);
+              setImageLoading(false);
+              return;
+            }
+            
+            if (signedUrlData?.signedUrl) {
+              photoUrl = signedUrlData.signedUrl;
+              console.log('✅ Got signed URL:', photoUrl);
+              setProfilePhotoUrl(photoUrl);
+              
+              // Update cache
+              if (globalProfileCache.cachedData) {
+                globalProfileCache.cachedData.profilePhotoUrl = photoUrl;
+              }
+              setImageLoading(false); // Reset loading after setting URL
+            }
+          } else {
+            // If it's already a full URL, use it directly
+            photoUrl = userProfile.photo_url;
+            setProfilePhotoUrl(photoUrl);
+            setImageLoading(false);
+          }
+        } catch (error) {
+          console.error('Error fetching profile photo URL:', error);
+          setImageLoading(false);
+        }
+      }
+      return;
+    }
+    
+    // If no photo, open image picker directly
+    await openImagePicker();
+  };
+
+  const openImagePicker = async () => {
     try {
       // Launch image picker directly (same approach as AddWeightScreen)
       // The system will handle permissions automatically if needed
@@ -220,6 +320,11 @@ const ProfileScreen = () => {
         Alert.alert('Error', `Failed to pick image: ${error.message || 'Please try again.'}`);
       }
     }
+  };
+
+  const handleEditPhoto = async () => {
+    setImageViewerVisible(false);
+    await openImagePicker();
   };
   
   const uploadProfilePhoto = async (imageUri) => {
@@ -286,6 +391,14 @@ const ProfileScreen = () => {
       // Update local state
       setUserProfile(prev => ({ ...prev, photo_url: fileName }));
       
+      // Update cache with new photo URL
+      globalProfileCache.cachedData = {
+        ...globalProfileCache.cachedData,
+        userProfile: { ...userProfile, photo_url: fileName },
+        profilePhotoUrl: signedUrlData.signedUrl,
+      };
+      globalProfileCache.lastFetchTime = Date.now();
+      
       Alert.alert('Success', 'Profile photo updated successfully!');
     } catch (error) {
       console.error('Error uploading profile photo:', error);
@@ -311,11 +424,11 @@ const ProfileScreen = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#E8E9F0" />
       
-             {/* Header */}
-       <View style={styles.header}>
-         <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('MainDashboard')}>
-           <Ionicons name="chevron-back" size={24} color="#333" />
-         </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('MainDashboard')}>
+          <Ionicons name="chevron-back" size={24} color="#333" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
         <View style={styles.placeholder} />
       </View>
@@ -328,7 +441,12 @@ const ProfileScreen = () => {
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
+            <TouchableOpacity 
+              style={styles.avatar}
+              onPress={handleProfilePhotoPress}
+              disabled={uploading}
+              activeOpacity={profilePhotoUrl ? 0.8 : 1}
+            >
               {profilePhotoUrl ? (
                 <Image
                   source={{ uri: profilePhotoUrl }}
@@ -338,7 +456,7 @@ const ProfileScreen = () => {
               ) : (
                 <Ionicons name="person" size={60} color="#999" />
               )}
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity 
               style={styles.cameraButton}
               onPress={handleProfilePhotoPress}
@@ -353,8 +471,6 @@ const ProfileScreen = () => {
           </View>
           
           <Text style={styles.profileName}>{userProfile?.name || 'User'}</Text>
-          <Text style={styles.profileStatement}>Your Kalry Statement</Text>
-       
         </View>
 
         {/* Quick Stats */}
@@ -446,6 +562,69 @@ const ProfileScreen = () => {
 
       {/* Updated FooterBar with oval design */}
       <FooterBar navigation={navigation} activeTab="Profile" />
+
+      {/* Square Image Viewer Modal - FIXED VERSION */}
+      <Modal
+        visible={imageViewerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setImageViewerVisible(false);
+          setImageLoading(false);
+        }}
+      >
+        <TouchableWithoutFeedback onPress={() => {
+          setImageViewerVisible(false);
+          setImageLoading(false);
+        }}>
+          <View style={styles.imageViewerContainer}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.squareModal}>
+                {/* Edit button (top right) */}
+                <TouchableOpacity
+                  style={styles.editButtonInModal}
+                  onPress={handleEditPhoto}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+                      <Text style={styles.editButtonTextInModal}>Edit</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {/* Image inside square modal */}
+                {imageLoading ? (
+                  <View style={styles.squareModalPlaceholder}>
+                    <ActivityIndicator size="large" color="#7B61FF" />
+                    <Text style={styles.loadingImageText}>Loading image...</Text>
+                  </View>
+                ) : profilePhotoUrl ? (
+                  <Image
+                    source={{ uri: profilePhotoUrl }}
+                    style={styles.squareModalImage}
+                    resizeMode="cover"
+                    onLoadEnd={() => setImageLoading(false)}
+                    onError={(error) => {
+                      setImageLoading(false);
+                      console.error('❌ Image load error in modal:', error.nativeEvent?.error || error);
+                      console.error('Failed URL:', profilePhotoUrl);
+                    }}
+                  />
+                ) : (
+                  <View style={styles.squareModalPlaceholder}>
+                    <Ionicons name="person" size={60} color="#999" />
+                    <Text style={styles.loadingImageText}>No image available</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -500,9 +679,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   avatarImage: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
   cameraButton: {
     position: 'absolute',
@@ -525,22 +704,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
     marginBottom: 5,
-  },
-  profileStatement: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 10,
-  },
-  tag: {
-    backgroundColor: '#555',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  tagText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '500',
   },
   quickStatsSection: {
     marginVertical: 20,
@@ -616,6 +779,78 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E8E9F0',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  // FIXED Square Image Viewer Modal Styles
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 100,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  squareModal: {
+    width: SCREEN_WIDTH * 0.85,
+    height: SCREEN_WIDTH * 0.85,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  squareModalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  squareModalPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  loadingImageText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  editButtonInModal: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#7B61FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  editButtonTextInModal: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
 });
 
 // Updated footerStyles for oval design
@@ -675,17 +910,6 @@ const footerStyles = StyleSheet.create({
     height: 3,
     backgroundColor: '#7B61FF',
     borderRadius: 2,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#E8E9F0',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
   },
 });
 

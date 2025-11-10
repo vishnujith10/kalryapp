@@ -19,16 +19,25 @@ export const handleGoogleSignIn = async () => {
     // Sign in with Google
     const signInResult = await GoogleSignin.signIn();
     
+    // Check if user cancelled (signInResult is null/undefined)
+    if (!signInResult) {
+      // User cancelled the sign-in - return silently
+      return {
+        success: false,
+        message: 'Sign-in cancelled',
+      };
+    }
+    
     // Extract idToken from either response format
     const idToken = signInResult?.data?.idToken || signInResult?.idToken;
     
+    // If no idToken found, it's likely a cancellation (user closed the window)
     if (!idToken) {
-      throw new Error(
-        'No ID token received from Google. Please check:\n' +
-        '1. webClientId is correct (Web Application type from Google Cloud)\n' +
-        '2. offlineAccess is set to false\n' +
-        '3. SHA-1 fingerprint is configured in Google Cloud Console'
-      );
+      // User cancelled the sign-in - return silently without showing error
+      return {
+        success: false,
+        message: 'Sign-in cancelled',
+      };
     }
 
     console.log('✅ ID Token received from Google');
@@ -58,11 +67,10 @@ export const handleGoogleSignIn = async () => {
     };
     
   } catch (error) {
-    console.error('Sign-in error:', error);
-
-    // Handle specific error codes
+    // Handle specific error codes first
     if (error.code === statusCodes.SIGN_IN_CANCELLED) {
       // User cancelled - return silently without error
+      console.log('ℹ️ Google sign-in cancelled by user');
       return {
         success: false,
         message: 'Sign-in cancelled',
@@ -77,23 +85,31 @@ export const handleGoogleSignIn = async () => {
         success: false,
         message: 'Play Services not available or outdated. Please update Google Play Services.',
       };
-    } else {
-      // Check if error message indicates cancellation
-      const errorMessage = error.message || error.toString() || '';
-      if (errorMessage.toLowerCase().includes('cancel') || 
-          errorMessage.toLowerCase().includes('user_cancelled') ||
-          error.code === 'SIGN_IN_CANCELLED') {
-        return {
-          success: false,
-          message: 'Sign-in cancelled',
-        };
-      }
-      
+    }
+    
+    // Check if error message indicates cancellation
+    const errorMessage = error.message || error.toString() || '';
+    const lowerErrorMessage = errorMessage.toLowerCase();
+    
+    if (lowerErrorMessage.includes('cancel') || 
+        lowerErrorMessage.includes('user_cancelled') ||
+        lowerErrorMessage.includes('cancelled') ||
+        error.code === 'SIGN_IN_CANCELLED' ||
+        error.code === statusCodes.SIGN_IN_CANCELLED) {
+      console.log('ℹ️ Google sign-in cancelled by user');
       return {
         success: false,
-        message: errorMessage || 'Failed to sign in with Google. Please try again.',
+        message: 'Sign-in cancelled',
       };
     }
+    
+    // Only log and show error for actual errors, not cancellations
+    console.error('Sign-in error:', error);
+    
+    return {
+      success: false,
+      message: errorMessage || 'Failed to sign in with Google. Please try again.',
+    };
   }
 };
 
