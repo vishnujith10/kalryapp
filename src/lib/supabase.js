@@ -16,36 +16,113 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Enhanced session management with "Remember Me" functionality
+// Optimized for network issues (like Expo tunnel)
 export const handleSessionExpiry = async () => {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    // First, try to get the current session (reads from AsyncStorage, no network needed)
+    // Use a short timeout to avoid hanging on network issues
+    const sessionPromise = supabase.auth.getSession();
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Session check timeout')), 3000); // 3 second timeout
+    });
+
+    let session, error;
+    try {
+      const result = await Promise.race([sessionPromise, timeoutPromise]);
+      session = result.data?.session;
+      error = result.error;
+    } catch (timeoutError) {
+      // On timeout, try one more time without timeout (might be slow network)
+      console.log('⚠️ Session check timed out, retrying without timeout...');
+      try {
+        const retryResult = await supabase.auth.getSession();
+        session = retryResult.data?.session;
+        error = retryResult.error;
+      } catch (retryError) {
+        console.error('❌ Session retry failed:', retryError);
+        return null;
+      }
+    }
     
-    if (error || !session) {
-      // Check if we have stored credentials for auto-login
+    // If we have a session (even if expired), return it immediately
+    // The app can validate/refresh it later when network is available
+    if (session && session.user) {
+      // Check if session is expired
+      const now = Math.floor(Date.now() / 1000);
+      if (session.expires_at && session.expires_at < now) {
+        // Session expired, but try to refresh it (non-blocking)
+        console.log('🔄 Session expired, attempting to refresh...');
+        // Don't wait for refresh - return session immediately and refresh in background
+        supabase.auth.refreshSession().then(({ data: { session: refreshedSession }, error: refreshError }) => {
+          if (refreshedSession && !refreshError) {
+            console.log('✅ Session refreshed in background');
+          } else {
+            console.log('⚠️ Background refresh failed:', refreshError?.message);
+          }
+        }).catch(err => {
+          console.log('⚠️ Background refresh error:', err);
+        });
+        // Return expired session anyway - app can handle it
+        return session;
+      } else {
+        // Session is valid
+        return session;
+      }
+    }
+    
+    // If no session, check for stored credentials (only if no network timeout)
+    if (!error || error.message !== 'Session check timeout') {
       const storedEmail = await AsyncStorage.getItem('remembered_email');
       const storedPassword = await AsyncStorage.getItem('remembered_password');
       
       if (storedEmail && storedPassword) {
-        // Auto-login with stored credentials
-        const { data, error: loginError } = await supabase.auth.signInWithPassword({
-          email: storedEmail,
-          password: storedPassword,
-        });
-        
-        if (loginError) {
-          // Clear invalid stored credentials
-          await AsyncStorage.removeItem('remembered_email');
-          await AsyncStorage.removeItem('remembered_password');
-          return null;
+        console.log('🔄 Attempting auto-login with stored credentials...');
+        // Auto-login with stored credentials (with timeout)
+        try {
+          const loginPromise = supabase.auth.signInWithPassword({
+            email: storedEmail,
+            password: storedPassword,
+          });
+          const loginTimeout = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Login timeout')), 5000);
+          });
+          
+          const loginResult = await Promise.race([loginPromise, loginTimeout]);
+          if (loginResult.data?.session) {
+            console.log('✅ Auto-login successful');
+            return loginResult.data.session;
+          }
+        } catch (loginError) {
+          console.log('⚠️ Auto-login failed:', loginError.message);
+          // Don't clear credentials on timeout - might be network issue
+          if (loginError.message !== 'Login timeout') {
+            await AsyncStorage.removeItem('remembered_email');
+            await AsyncStorage.removeItem('remembered_password');
+          }
         }
-        
-        return data.session;
       }
     }
     
-    return session;
+    // If we still have a session object (even if expired), return it
+    if (session) {
+      console.log('⚠️ Returning session (may be expired):', session.user?.email);
+      return session;
+    }
+    
+    console.log('❌ No valid session found');
+    return null;
   } catch (error) {
-    console.error('Session handling error:', error);
+    console.error('❌ Session handling error:', error);
+    // Last resort: try to get session one more time
+    try {
+      const { data: { session: lastResortSession } } = await supabase.auth.getSession();
+      if (lastResortSession) {
+        console.log('✅ Got session on last resort attempt');
+        return lastResortSession;
+      }
+    } catch (lastError) {
+      console.error('❌ Last resort also failed:', lastError);
+    }
     return null;
   }
 };

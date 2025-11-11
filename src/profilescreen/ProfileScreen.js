@@ -103,6 +103,52 @@ const ProfileScreen = () => {
   const insets = useSafeAreaInsets(); // Get safe area insets for bottom navigation
   const navigation = useNavigation();
   
+  // Log when ProfileScreen is rendered
+  useEffect(() => {
+    console.log('🔴 ===== ProfileScreen RENDERED =====');
+    console.log('🔴 Current timestamp:', new Date().toISOString());
+    console.log('🔴 This should only show if user is not onboarded');
+    
+    // Check if we should actually be here
+    const checkIfShouldBeHere = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('user_profile')
+            .select('name, age, gender, height, weight, calorie_goal')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile) {
+            const hasEssentialFields = 
+              profile.name && 
+              profile.age && 
+              profile.gender && 
+              profile.height && 
+              profile.weight && 
+              profile.calorie_goal;
+            
+            if (hasEssentialFields) {
+              console.log('⚠️ WARNING: User is onboarded but on ProfileScreen - redirecting to MainDashboard');
+              // User is actually onboarded, redirect to MainDashboard
+              setTimeout(() => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'MainDashboard' }],
+                });
+              }, 1000);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking profile in ProfileScreen:', error);
+      }
+    };
+    
+    checkIfShouldBeHere();
+  }, [navigation]);
+  
   // Initialize state from cache if available (prevents loading flash)
   const [userProfile, setUserProfile] = useState(() => {
     const now = Date.now();

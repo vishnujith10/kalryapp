@@ -311,13 +311,16 @@ const JournalScreen = () => {
         .lte('date', endDateStr)
         .order('date', { ascending: false });
       if (error) throw error;
-      return (data || []).map(w => ({
-        id: `water-${w.id}`,
-        title: 'Hydration Logged',
-        description: `${w.current_intake_ml || 0}ml`,
-        type: 'hydration',
-        _date: w.date
-      }));
+      // Only return entries where user actually added water (current_intake_ml > 0)
+      return (data || [])
+        .filter(w => w.current_intake_ml && w.current_intake_ml > 0)
+        .map(w => ({
+          id: `water-${w.id}`,
+          title: 'Hydration Logged',
+          description: `${w.current_intake_ml}ml`,
+          type: 'hydration',
+          _date: w.date
+        }));
     } catch (error) {
       console.error('Error fetching water (range):', error);
       return [];
@@ -411,41 +414,27 @@ const JournalScreen = () => {
         datesInRange.push(getLocalDateString(d));
       }
       
-      // 4. For each date in range, find the most recent weight up to that date
+      // 4. Only return weight entries where user actually logged weight on that specific date
+      // Don't carry forward weight - only show actual logged entries
       const result = [];
       
       for (const dateStr of datesInRange) {
-        // Find the most recent weight log on or before this date
-        let currentWeight = null;
+        // Find weight log that was actually logged on this specific date (not carried forward)
+        const actualLog = allLogs.find(log => log.date === dateStr);
         
-        for (const log of allLogs) {
-          if (log.date <= dateStr) {
-            currentWeight = {
-              id: log.id,
-              weight: log.weight,
-              note: log.note,
-              emoji: log.emoji,
-              date: log.date,
-              isActualLog: log.date === dateStr // True if logged on this specific date
-            };
-          } else {
-            break; // logs are sorted ascending, so we can break
-          }
-        }
-        
-        if (currentWeight) {
+        if (actualLog) {
           result.push({
-            id: `weight-${currentWeight.id}-${dateStr}`,
-            title: currentWeight.isActualLog ? 'Weight Logged' : 'Weight (Carried Forward)',
-            description: `${currentWeight.weight} kg${currentWeight.note ? ' - ' + currentWeight.note : ''}`,
+            id: `weight-${actualLog.id}`,
+            title: 'Weight Logged',
+            description: `${actualLog.weight} kg${actualLog.note ? ' - ' + actualLog.note : ''}`,
             type: 'weight',
             _date: dateStr,
-            _isActualLog: currentWeight.isActualLog
+            _isActualLog: true
           });
         }
       }
       
-      console.log('✅ Processed weight data for', result.length, 'days');
+      console.log('✅ Processed weight data for', result.length, 'days (only actual logs)');
       return result;
       
     } catch (error) {

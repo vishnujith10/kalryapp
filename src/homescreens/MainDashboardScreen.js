@@ -8,11 +8,10 @@ import { KalryAlgorithmManager } from '../algorithms/KalryAlgorithmManager';
 import { DailyCheckInModal } from '../components/DailyCheckInModal';
 import { OnboardingContext } from '../context/OnboardingContext';
 import supabase from '../lib/supabase';
-import { deleteFoodLog, getFoodLogs } from '../utils/api';
+import { getFoodLogs } from '../utils/api';
 import { getMainDashboardCache, invalidateMainDashboardCache, updateMainDashboardCacheOptimistic } from '../utils/cacheManager';
 import { getFoodStreak } from '../utils/streakService';
 import useTodaySteps from '../utils/useTodaySteps';
-import RecentMeals from './RecentMeals';
 
 // Use centralized cache
 const globalCache = getMainDashboardCache();
@@ -310,7 +309,6 @@ const MainDashboardScreen = ({ route }) => {
   const [calories, setCalories] = useState(() => globalCache.cachedData?.calories || 0);
   const [mealsLogged, setMealsLogged] = useState(() => globalCache.cachedData?.mealsLogged || 0);
   const [lastSleepDuration, setLastSleepDuration] = useState('--');
-  const [recentMeals, setRecentMeals] = useState(() => globalCache.cachedData?.recentMeals || []);
   const [todayWorkouts, setTodayWorkouts] = useState(() => globalCache.cachedData?.todayWorkouts || 0);
 
   // --- Weight Journey State ---
@@ -848,35 +846,6 @@ const MainDashboardScreen = ({ route }) => {
   const weight = Number(onboardingData?.weight) || 0;
   const weightGoal = Number(onboardingData?.target_weight) || 0;
 
-  // Add a handler for deleting a meal from recentMeals
-  const handleDeleteMeal = async (index) => {
-    try {
-      const mealToDelete = recentMeals[index];
-      if (!mealToDelete || !mealToDelete.id) return;
-      await deleteFoodLog(mealToDelete.id);
-      // Refetch logs to update calories, mealsLogged, and recentMeals
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) return;
-      const logs = await getFoodLogs(session.user.id);
-      // Filter logs for today
-      const today = new Date();
-      const startOfDay = new Date(today);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(today);
-      endOfDay.setHours(23, 59, 59, 999);
-      const filteredLogs = logs.filter(log => {
-        const logDate = new Date(log.created_at);
-        return logDate >= startOfDay && logDate <= endOfDay;
-      });
-      setRecentMeals(filteredLogs.slice(-5).reverse());
-      setMealsLogged(filteredLogs.length);
-      setCalories(filteredLogs.reduce((sum, log) => sum + (log.calories || 0), 0));
-    } catch (error) {
-      console.error('Error deleting meal:', error);
-      Alert.alert('Error', 'Failed to delete meal.');
-    }
-  };
-
   // Helper to normalize date string (handles 'YYYY-MM-DD' and 'YYYY-MM-DDTHH:MM:SSZ')
   function getDateOnly(str) {
     return str ? str.slice(0, 10) : '';
@@ -918,7 +887,6 @@ const MainDashboardScreen = ({ route }) => {
       if (globalCache.cachedData && isFresh) {
         // Data is fresh - use cache, no revalidation needed
         // Always restore from cache when fresh (not just first time)
-        setRecentMeals(globalCache.cachedData.recentMeals || []);
         setMealsLogged(globalCache.cachedData.mealsLogged || 0);
         setCalories(globalCache.cachedData.calories || 0);
         setSleepLogs(globalCache.cachedData.sleepLogs || []);
@@ -932,7 +900,6 @@ const MainDashboardScreen = ({ route }) => {
       if (globalCache.cachedData && isStale && !isFresh) {
         // Data is stale but within cache duration - show stale, revalidate in background
         // Always restore from cache (not just first time)
-        setRecentMeals(globalCache.cachedData.recentMeals || []);
         setMealsLogged(globalCache.cachedData.mealsLogged || 0);
         setCalories(globalCache.cachedData.calories || 0);
         setSleepLogs(globalCache.cachedData.sleepLogs || []);
@@ -968,7 +935,6 @@ const MainDashboardScreen = ({ route }) => {
             const logDate = new Date(log.created_at).getTime();
             return logDate >= startOfDay && logDate <= endOfDay;
           });
-          setRecentMeals(filteredLogs.slice(-5).reverse());
           setMealsLogged(filteredLogs.length);
           setCalories(filteredLogs.reduce((sum, log) => sum + (log.calories || 0), 0));
           
@@ -986,7 +952,6 @@ const MainDashboardScreen = ({ route }) => {
           
           // Cache the data
           globalCache.cachedData = {
-            recentMeals: filteredLogs.slice(-5).reverse(),
             mealsLogged: filteredLogs.length,
             calories: filteredLogs.reduce((sum, log) => sum + (log.calories || 0), 0),
             sleepLogs: sleepData.data || [],
@@ -1788,8 +1753,6 @@ const MainDashboardScreen = ({ route }) => {
 
 
         </View>
-        {/* Recent Meals Section */}
-        <RecentMeals recentMeals={recentMeals} handleDeleteMeal={handleDeleteMeal} />
 
       </ScrollView>
       <FooterBar navigation={navigation} activeTab="Home" />
