@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -471,6 +471,7 @@ export default function SavedCardioSessionsScreen({ route }) {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        <StatusBar style="auto" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading sessions...</Text>
@@ -482,7 +483,7 @@ export default function SavedCardioSessionsScreen({ route }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+      <StatusBar style="auto" />
       
       {/* Header */}
       <View style={styles.header}>

@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { supabase } from '../lib/supabase';
@@ -14,6 +15,7 @@ const MinimalSignupTestScreen = () => {
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <StatusBar style="auto" />
       <Text>Running minimal signup test... Check your logs.</Text>
     </View>
   );

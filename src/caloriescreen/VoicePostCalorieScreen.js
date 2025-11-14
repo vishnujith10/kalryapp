@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { useFocusEffect } from '@react-navigation/native';
 import Constants from 'expo-constants';
+import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -763,9 +764,10 @@ The JSON object must have this structure:
       if (error) throw error;
       
       // Optimistic cache update (Instagram pattern)
-      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic } = require('../utils/cacheManager');
+      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic, updateMainDashboardStreakOptimistic } = require('../utils/cacheManager');
       updateMainDashboardCacheOptimistic(logData);
       updateHomeScreenCacheOptimistic(logData);
+      updateMainDashboardStreakOptimistic(); // Trigger streak update
       
       Alert.alert('Success', 'Food logged successfully!');
       navigation.replace('Home');
@@ -790,6 +792,7 @@ The JSON object must have this structure:
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="auto" />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>

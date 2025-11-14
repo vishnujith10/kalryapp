@@ -1,6 +1,7 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -199,6 +200,7 @@ export default function CardioPlayerScreen({ route, navigation }) {
 
   return (
     <View style={styles.background}>
+      <StatusBar style="auto" />
       {/* Header */}
       <View style={{ paddingTop: 32, paddingHorizontal: 24 }}>
         <Text style={styles.sessionName}>{sessionName}</Text>

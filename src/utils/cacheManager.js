@@ -5,12 +5,13 @@ const mainDashboardCache = {
   isFetching: false,
   lastFetchTime: 0,
   lastHydrationFetch: 0,
-  CACHE_DURATION: 60000, // 60 seconds
-  STALE_TIME: 10000, // 10 seconds
+  CACHE_DURATION: 30000, // 30 seconds (reduced for faster updates)
+  STALE_TIME: 5000, // 5 seconds (reduced for faster revalidation)
   cachedData: null,
   cachedHydrationData: null,
   cacheHits: 0,
   cacheMisses: 0,
+  _listeners: new Set(), // For notifying listeners of cache updates
 };
 
 // Home Screen Cache
@@ -28,10 +29,18 @@ const homeScreenCache = {
 export const getMainDashboardCache = () => mainDashboardCache;
 export const getHomeScreenCache = () => homeScreenCache;
 
+// Subscribe to cache updates
+export const subscribeToMainDashboardCache = (callback) => {
+  mainDashboardCache._listeners.add(callback);
+  return () => {
+    mainDashboardCache._listeners.delete(callback);
+  };
+};
+
 // Optimistic update for MainDashboard - increment values
 export const updateMainDashboardCacheOptimistic = (newData) => {
   if (mainDashboardCache.cachedData) {
-    // Increment existing values
+    // Increment existing values - create new object reference to trigger React updates
     mainDashboardCache.cachedData = {
       ...mainDashboardCache.cachedData,
       calories: (mainDashboardCache.cachedData.calories || 0) + (newData.calories || 0),
@@ -52,6 +61,18 @@ export const updateMainDashboardCacheOptimistic = (newData) => {
       todayWorkouts: 0,
     };
     mainDashboardCache.lastFetchTime = Date.now();
+  }
+  
+  // Notify listeners of cache update
+  mainDashboardCache._listeners.forEach(listener => listener());
+};
+
+// Optimistic streak update - trigger streak refetch when food is logged
+export const updateMainDashboardStreakOptimistic = () => {
+  // Mark streak cache as stale to force immediate refetch
+  // This will be handled by the listener in MainDashboardScreen
+  if (mainDashboardCache._streakListeners) {
+    mainDashboardCache._streakListeners.forEach(listener => listener());
   }
 };
 

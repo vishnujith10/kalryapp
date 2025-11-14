@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Alert, BackHandler, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,10 +18,11 @@ import useTodaySteps from '../utils/useTodaySteps';
 const globalCache = getMainDashboardCache();
 
 // Streak cache to prevent unnecessary re-fetches
-const streakCache = {
+export const streakCache = {
   lastFetch: 0,
   cachedStreak: null,
   CACHE_DURATION: 30000, // 30 seconds
+  _listeners: new Set(), // For notifying listeners of streak updates
 };
 
 // Export for backward compatibility
@@ -101,7 +103,8 @@ const getTodaysQuote = () => {
   return QUOTES[day % QUOTES.length];
 };
 
-// Memoized Streak Badge Component
+// Memoized Streak Badge Component - optimized to prevent unnecessary re-renders
+// Always renders (like ExerciseScreen) - shows "0-day streak" when streak is 0
 const StreakBadge = React.memo(({ calorieStreak }) => {
   return (
     <View style={styles.streakBadge}>
@@ -112,7 +115,7 @@ const StreakBadge = React.memo(({ calorieStreak }) => {
     </View>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if streak value changed
+  // Only re-render if streak value actually changed (strict equality check)
   return prevProps.calorieStreak === nextProps.calorieStreak;
 });
 StreakBadge.displayName = 'StreakBadge';
@@ -263,8 +266,30 @@ const MainDashboardScreen = ({ route }) => {
   const [todaysCheckInData, setTodaysCheckInData] = useState(null);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [hasShownModalToday, setHasShownModalToday] = useState(false);
-  const [calorieStreak, setCalorieStreak] = useState(0);
-  const calorieStreakRef = useRef(0); // Track current streak value to avoid unnecessary setState calls
+  
+  // Refs to track check-in state to prevent unnecessary updates
+  const hasCheckedInTodayRef = useRef(false);
+  const hasSeenModalTodayRef = useRef(false);
+  const hasShownModalTodayRef = useRef(false);
+  const todaysCheckInDataRef = useRef(null);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    hasCheckedInTodayRef.current = hasCheckedInToday;
+    hasSeenModalTodayRef.current = hasSeenModalToday;
+    hasShownModalTodayRef.current = hasShownModalToday;
+    todaysCheckInDataRef.current = todaysCheckInData;
+  }, [hasCheckedInToday, hasSeenModalToday, hasShownModalToday, todaysCheckInData]);
+  // Initialize streak from cache if available to prevent unnecessary updates
+  const [calorieStreak, setCalorieStreak] = useState(() => {
+    // Initialize from cache if available and fresh
+    const now = Date.now();
+    if (streakCache.cachedStreak !== null && (now - streakCache.lastFetch) < streakCache.CACHE_DURATION) {
+      return streakCache.cachedStreak;
+    }
+    return 0;
+  });
+  const calorieStreakRef = useRef(calorieStreak); // Track current streak value to avoid unnecessary setState calls
   
   // Keep ref in sync with state
   useEffect(() => {
@@ -310,6 +335,38 @@ const MainDashboardScreen = ({ route }) => {
   const [mealsLogged, setMealsLogged] = useState(() => globalCache.cachedData?.mealsLogged || 0);
   const [lastSleepDuration, setLastSleepDuration] = useState('--');
   const [todayWorkouts, setTodayWorkouts] = useState(() => globalCache.cachedData?.todayWorkouts || 0);
+  
+  // Refs to track current values for comparison (prevents stale closures)
+  const caloriesRef = useRef(calories);
+  const mealsLoggedRef = useRef(mealsLogged);
+  const todayWorkoutsRef = useRef(todayWorkouts);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    caloriesRef.current = calories;
+    mealsLoggedRef.current = mealsLogged;
+    todayWorkoutsRef.current = todayWorkouts;
+  }, [calories, mealsLogged, todayWorkouts]);
+  
+  // Sync state with cache immediately when cache updates (for optimistic updates)
+  useEffect(() => {
+    const updateFromCache = () => {
+      if (globalCache.cachedData) {
+        setMealsLogged(globalCache.cachedData.mealsLogged || 0);
+        setCalories(globalCache.cachedData.calories || 0);
+        setTodayWorkouts(globalCache.cachedData.todayWorkouts || 0);
+      }
+    };
+    
+    // Subscribe to cache updates
+    const { subscribeToMainDashboardCache } = require('../utils/cacheManager');
+    const unsubscribe = subscribeToMainDashboardCache(updateFromCache);
+    
+    // Initial sync
+    updateFromCache();
+    
+    return unsubscribe;
+  }, []);
 
   // --- Weight Journey State ---
   const [currentWeight, setCurrentWeight] = useState(null);
@@ -884,30 +941,39 @@ const MainDashboardScreen = ({ route }) => {
       const isFresh = timeSinceLastFetch < globalCache.CACHE_DURATION;
       
       // SWR Pattern: Stale-While-Revalidate (like Instagram)
-      if (globalCache.cachedData && isFresh) {
-        // Data is fresh - use cache, no revalidation needed
-        // Always restore from cache when fresh (not just first time)
-        setMealsLogged(globalCache.cachedData.mealsLogged || 0);
-        setCalories(globalCache.cachedData.calories || 0);
-        setSleepLogs(globalCache.cachedData.sleepLogs || []);
-        setTodaySleepLog(globalCache.cachedData.todaySleepLog || null);
-        if (globalCache.cachedData.sleepGoal) setSleepGoal(globalCache.cachedData.sleepGoal);
-        setTodayWorkouts(globalCache.cachedData.todayWorkouts || 0);
+      // ALWAYS restore from cache first (even if stale) for instant UI updates
+      if (globalCache.cachedData) {
+        // Only update state if values actually changed (prevents unnecessary re-renders)
+        // Use refs to avoid stale closures
+        const cached = globalCache.cachedData;
+        if ((cached.mealsLogged || 0) !== mealsLoggedRef.current) {
+          mealsLoggedRef.current = cached.mealsLogged || 0;
+          setMealsLogged(cached.mealsLogged || 0);
+        }
+        if ((cached.calories || 0) !== caloriesRef.current) {
+          caloriesRef.current = cached.calories || 0;
+          setCalories(cached.calories || 0);
+        }
+        if (JSON.stringify(cached.sleepLogs || []) !== JSON.stringify(sleepLogs)) {
+          setSleepLogs(cached.sleepLogs || []);
+        }
+        if (JSON.stringify(cached.todaySleepLog) !== JSON.stringify(todaySleepLog)) {
+          setTodaySleepLog(cached.todaySleepLog || null);
+        }
+        if (cached.sleepGoal && cached.sleepGoal !== sleepGoal) {
+          setSleepGoal(cached.sleepGoal);
+        }
+        if ((cached.todayWorkouts || 0) !== todayWorkoutsRef.current) {
+          todayWorkoutsRef.current = cached.todayWorkouts || 0;
+          setTodayWorkouts(cached.todayWorkouts || 0);
+        }
         globalCache.cacheHits++;
-        return; // Fresh cache - no fetch needed
-      }
-      
-      if (globalCache.cachedData && isStale && !isFresh) {
-        // Data is stale but within cache duration - show stale, revalidate in background
-        // Always restore from cache (not just first time)
-        setMealsLogged(globalCache.cachedData.mealsLogged || 0);
-        setCalories(globalCache.cachedData.calories || 0);
-        setSleepLogs(globalCache.cachedData.sleepLogs || []);
-        setTodaySleepLog(globalCache.cachedData.todaySleepLog || null);
-        if (globalCache.cachedData.sleepGoal) setSleepGoal(globalCache.cachedData.sleepGoal);
-        setTodayWorkouts(globalCache.cachedData.todayWorkouts || 0);
-        globalCache.cacheHits++;
-        // Continue to fetch fresh data in background (don't return)
+        
+        // If data is fresh, skip fetch
+        if (isFresh) {
+          return; // Fresh cache - no fetch needed
+        }
+        // If stale but within cache duration, continue to revalidate in background
       }
       
       // Prevent concurrent fetches
@@ -950,7 +1016,7 @@ const MainDashboardScreen = ({ route }) => {
           const workoutsCount = (cardioData.data?.length || 0) + (routineData.data?.length || 0);
           setTodayWorkouts(workoutsCount);
           
-          // Cache the data
+          // Cache the data - create new object reference to trigger React updates
           globalCache.cachedData = {
             mealsLogged: filteredLogs.length,
             calories: filteredLogs.reduce((sum, log) => sum + (log.calories || 0), 0),
@@ -962,6 +1028,11 @@ const MainDashboardScreen = ({ route }) => {
           
           // Update cache timestamp
           globalCache.lastFetchTime = Date.now();
+          
+          // Notify listeners of cache update
+          if (globalCache._listeners) {
+            globalCache._listeners.forEach(listener => listener());
+          }
         } catch (error) {
           // Silent error handling
         } finally {
@@ -1073,35 +1144,80 @@ const MainDashboardScreen = ({ route }) => {
     }
   }, [realUserId, onboardingData]);
 
+  // Subscribe to streak updates when food is logged (via cache manager)
+  useEffect(() => {
+    if (!realUserId) return;
+    
+    const updateStreakFromCache = () => {
+      // Force refetch streak immediately when food is logged
+      streakCache.lastFetch = 0;
+      // Fetch fresh streak immediately
+      getFoodStreak(realUserId).then(currentStreak => {
+        streakCache.cachedStreak = currentStreak;
+        streakCache.lastFetch = Date.now();
+        setCalorieStreak(prevStreak => {
+          if (prevStreak !== currentStreak) {
+            calorieStreakRef.current = currentStreak;
+            return currentStreak;
+          }
+          return prevStreak;
+        });
+      }).catch(error => {
+        console.error('Error fetching streak:', error);
+      });
+    };
+    
+    // Subscribe to streak updates from cache manager
+    if (!globalCache._streakListeners) {
+      globalCache._streakListeners = new Set();
+    }
+    globalCache._streakListeners.add(updateStreakFromCache);
+    
+    return () => {
+      if (globalCache._streakListeners) {
+        globalCache._streakListeners.delete(updateStreakFromCache);
+      }
+    };
+  }, [realUserId]);
+
   // Daily check-in flow management - check every time screen focuses
   useFocusEffect(
     React.useCallback(() => {
       checkDailyCheckInStatus();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
+
+  // Separate useFocusEffect for streak loading to prevent re-renders from check-in status
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!realUserId) return;
       
-      // Reload streak with caching to prevent unnecessary re-fetches
+      // Check cache first - if fresh and value hasn't changed, skip entirely (like ExerciseScreen)
+      const now = Date.now();
+      const timeSinceLastFetch = now - streakCache.lastFetch;
+      const cacheExpired = !streakCache.cachedStreak || 
+                          (timeSinceLastFetch >= streakCache.CACHE_DURATION);
+      
+      if (!cacheExpired) {
+        // Cache is fresh - only update if value changed (like ExerciseScreen pattern)
+        const cachedValue = streakCache.cachedStreak;
+        if (cachedValue !== calorieStreakRef.current) {
+          calorieStreakRef.current = cachedValue;
+          setCalorieStreak(cachedValue);
+        }
+        // Don't fetch if cache is fresh
+        return;
+      }
+      
+      // Cache expired - fetch fresh streak
       const loadStreak = async () => {
-        if (!realUserId) return;
-        
         try {
-          const now = Date.now();
-          const timeSinceLastFetch = now - streakCache.lastFetch;
-          
-          // Use cached streak if it's fresh (within 30 seconds)
-          if (streakCache.cachedStreak !== null && timeSinceLastFetch < streakCache.CACHE_DURATION) {
-            // Only update state if value actually changed (check ref to avoid setState call)
-            if (calorieStreakRef.current !== streakCache.cachedStreak) {
-              calorieStreakRef.current = streakCache.cachedStreak;
-              setCalorieStreak(streakCache.cachedStreak);
-            }
-            return;
-          }
-          
-          // Fetch fresh streak
           const currentStreak = await getFoodStreak(realUserId);
           streakCache.cachedStreak = currentStreak;
           streakCache.lastFetch = now;
-          // Only update state if value actually changed (check ref to avoid setState call)
-          if (calorieStreakRef.current !== currentStreak) {
+          // Only update state if value actually changed (like ExerciseScreen pattern)
+          if (currentStreak !== calorieStreakRef.current) {
             calorieStreakRef.current = currentStreak;
             setCalorieStreak(currentStreak);
           }
@@ -1111,7 +1227,8 @@ const MainDashboardScreen = ({ route }) => {
       };
       
       loadStreak();
-    }, [realUserId])
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
   );
 
   // Reload steps data when screen focuses (to pick up deletions from StepTrackerScreen)
@@ -1149,26 +1266,39 @@ const MainDashboardScreen = ({ route }) => {
       const seenModalData = await AsyncStorage.getItem(`seenModal_${today}`);
       const shownModalData = await AsyncStorage.getItem(`shownModal_${today}`);
       
+      // Only update state if values actually changed (prevents unnecessary re-renders)
+      // Use refs to avoid stale closures
       if (checkInData) {
         const parsedData = JSON.parse(checkInData);
-        setHasCheckedInToday(true);
-        setTodaysCheckInData(parsedData);
+        if (!hasCheckedInTodayRef.current || JSON.stringify(todaysCheckInDataRef.current) !== JSON.stringify(parsedData)) {
+          hasCheckedInTodayRef.current = true;
+          todaysCheckInDataRef.current = parsedData;
+          setHasCheckedInToday(true);
+          setTodaysCheckInData(parsedData);
+        }
       }
       
-      if (seenModalData) {
+      if (seenModalData && !hasSeenModalTodayRef.current) {
+        hasSeenModalTodayRef.current = true;
         setHasSeenModalToday(true);
       }
       
-      if (shownModalData) {
+      if (shownModalData && !hasShownModalTodayRef.current) {
+        hasShownModalTodayRef.current = true;
         setHasShownModalToday(true);
       }
       
       // Auto-open modal only if user hasn't checked in AND hasn't seen modal today AND hasn't shown modal today
       if (!checkInData && !seenModalData && !shownModalData) {
-        setShowCheckIn(true);
-        setHasShownModalToday(true);
-        // Persist that we've shown the modal today
-        await AsyncStorage.setItem(`shownModal_${today}`, 'true');
+        if (!showCheckIn) {
+          setShowCheckIn(true);
+        }
+        if (!hasShownModalTodayRef.current) {
+          hasShownModalTodayRef.current = true;
+          setHasShownModalToday(true);
+          // Persist that we've shown the modal today
+          await AsyncStorage.setItem(`shownModal_${today}`, 'true');
+        }
       }
     } catch (error) {
       console.error('Error checking daily check-in status:', error);
@@ -1361,6 +1491,7 @@ const MainDashboardScreen = ({ route }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={['top']}>
+      <StatusBar style="auto" />
       {/* Daily Check-in Modal */}
       <DailyCheckInModal
         visible={showCheckIn}
@@ -1477,9 +1608,7 @@ const MainDashboardScreen = ({ route }) => {
                 {hasCheckedInToday ? 'View Check-in' : 'Daily Check-in'}
               </Text>
             </TouchableOpacity>
-            {calorieStreak > 0 && (
-              <StreakBadge calorieStreak={calorieStreak} />
-            )}
+            <StreakBadge calorieStreak={calorieStreak} />
           </View>
           {ritualStreak !== null ? (
             <View style={styles.streakRowBlue}>

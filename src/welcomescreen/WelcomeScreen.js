@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ const WelcomeScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="auto" />
       <KeyboardAvoidingView
         style={styles.flexGrow}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

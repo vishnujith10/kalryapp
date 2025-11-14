@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -264,7 +264,7 @@ const PersonalInfoScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#E8E9F0" />
+      <StatusBar style="auto" />
       
       {/* Header */}
       <View style={styles.header}>

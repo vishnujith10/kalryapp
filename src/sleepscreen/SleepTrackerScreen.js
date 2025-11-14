@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -693,6 +694,7 @@ const SleepTrackerScreen = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="auto" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>

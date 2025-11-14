@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -121,9 +122,10 @@ const ManualLogScreen = ({ route, navigation }) => {
       if (error) throw error;
 
       // Optimistic cache update (Instagram pattern)
-      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic } = require('../utils/cacheManager');
+      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic, updateMainDashboardStreakOptimistic } = require('../utils/cacheManager');
       updateMainDashboardCacheOptimistic(logData);
       updateHomeScreenCacheOptimistic(logData);
+      updateMainDashboardStreakOptimistic(); // Trigger streak update
 
       Alert.alert('Success', 'Food logged successfully!');
       navigation.navigate('Home');
@@ -244,6 +246,7 @@ EXAMPLE: If user enters "200g black beans", calculate nutrition for exactly 200g
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 0 }}>
+      <StatusBar style="auto" />
       {/* Header with Quick Log button */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 16 }}>
         <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#222' }}>Text to Calorie</Text>

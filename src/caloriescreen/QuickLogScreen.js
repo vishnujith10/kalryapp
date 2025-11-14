@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from 'expo-constants';
+import { StatusBar } from "expo-status-bar";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -311,6 +312,7 @@ The JSON object must have this structure:
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={['top','bottom']}>
+      <StatusBar style="auto" />
       {/* Small compact loading modal when analyzing (similar to VoiceCalorieScreen) */}
       <Modal
         visible={isLoading}

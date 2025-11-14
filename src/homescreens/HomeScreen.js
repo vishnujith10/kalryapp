@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
   Alert,
@@ -37,12 +38,23 @@ const screenWidth = Dimensions.get("window").width;
 // Use centralized cache
 const globalHomeCache = getHomeScreenCache();
 
-// Streak cache to prevent unnecessary re-fetches
-const streakCache = {
-  lastFetch: 0,
-  cachedStreak: null,
-  CACHE_DURATION: 30000, // 30 seconds
-};
+// Import shared streak cache from MainDashboardScreen
+let streakCache;
+try {
+  const mainDashboardModule = require('./MainDashboardScreen');
+  streakCache = mainDashboardModule.streakCache || {
+    lastFetch: 0,
+    cachedStreak: null,
+    CACHE_DURATION: 30000,
+  };
+} catch {
+  // Fallback if import fails
+  streakCache = {
+    lastFetch: 0,
+    cachedStreak: null,
+    CACHE_DURATION: 30000,
+  };
+}
 
 // Username cache to prevent re-fetching
 const userNameCache = {
@@ -345,7 +357,21 @@ const HomeScreen = ({ navigation }) => {
   const [expandedMeal, setExpandedMeal] = useState(null);
   const [selectedMeals, setSelectedMeals] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [calorieStreak, setCalorieStreak] = useState(0);
+  // Initialize streak from cache if available to prevent unnecessary updates
+  const [calorieStreak, setCalorieStreak] = useState(() => {
+    // Initialize from cache if available and fresh
+    const now = Date.now();
+    if (streakCache.cachedStreak !== null && (now - streakCache.lastFetch) < streakCache.CACHE_DURATION) {
+      return streakCache.cachedStreak;
+    }
+    return 0;
+  });
+  const calorieStreakRef = React.useRef(calorieStreak); // Track current streak value to avoid unnecessary setState calls
+  
+  // Keep ref in sync with state
+  React.useEffect(() => {
+    calorieStreakRef.current = calorieStreak;
+  }, [calorieStreak]);
   const [totalCaloriesBurned, setTotalCaloriesBurned] = useState(0);
   const [calorieBreakdown, setCalorieBreakdown] = useState({ steps: 0, workouts: 0, cardio: 0 });
   const { stepsToday, calories: stepCalories } = useTodaySteps();
@@ -536,14 +562,23 @@ const HomeScreen = ({ navigation }) => {
             const streakTimeSinceLastFetch = streakNow - streakCache.lastFetch;
             
             if (streakCache.cachedStreak !== null && streakTimeSinceLastFetch < streakCache.CACHE_DURATION) {
-              setCalorieStreak(streakCache.cachedStreak);
+              // Only update state if value actually changed (like ExerciseScreen pattern)
+              const cachedValue = streakCache.cachedStreak;
+              if (cachedValue !== calorieStreakRef.current) {
+                calorieStreakRef.current = cachedValue;
+                setCalorieStreak(cachedValue);
+              }
               return;
             }
             
             const currentStreak = await getFoodStreak(user.id);
             streakCache.cachedStreak = currentStreak;
             streakCache.lastFetch = streakNow;
-            setCalorieStreak(currentStreak);
+            // Only update state if value actually changed (like ExerciseScreen pattern)
+            if (currentStreak !== calorieStreakRef.current) {
+              calorieStreakRef.current = currentStreak;
+              setCalorieStreak(currentStreak);
+            }
           } catch (error) {
             console.error('Error loading streak:', error);
           }
@@ -576,14 +611,25 @@ const HomeScreen = ({ navigation }) => {
           const streakTimeSinceLastFetch = streakNow - streakCache.lastFetch;
           
           if (streakCache.cachedStreak !== null && streakTimeSinceLastFetch < streakCache.CACHE_DURATION) {
-            setCalorieStreak(streakCache.cachedStreak);
+            // Only update state if value actually changed (like ExerciseScreen pattern)
+            // Use ref to get current value to avoid stale closure
+            const cachedValue = streakCache.cachedStreak;
+            if (cachedValue !== calorieStreakRef.current) {
+              calorieStreakRef.current = cachedValue;
+              setCalorieStreak(cachedValue);
+            }
             return;
           }
           
           const currentStreak = await getFoodStreak(user.id);
           streakCache.cachedStreak = currentStreak;
           streakCache.lastFetch = streakNow;
-          setCalorieStreak(currentStreak);
+          // Only update state if value actually changed (like ExerciseScreen pattern)
+          // Use ref to get current value to avoid stale closure
+          if (currentStreak !== calorieStreakRef.current) {
+            calorieStreakRef.current = currentStreak;
+            setCalorieStreak(currentStreak);
+          }
         } catch (error) {
           console.error('Error loading streak:', error);
         }
@@ -721,14 +767,24 @@ const HomeScreen = ({ navigation }) => {
         // Update cache
         streakCache.cachedStreak = currentStreak;
         streakCache.lastFetch = Date.now();
-        setCalorieStreak(currentStreak);
+        // Only update state if value actually changed
+        // Use ref to get current value to avoid stale closure
+        if (currentStreak !== calorieStreakRef.current) {
+          calorieStreakRef.current = currentStreak;
+          setCalorieStreak(currentStreak);
+        }
       } else if (user.id) {
         // Just get current streak if no logs today
         const currentStreak = await getFoodStreak(user.id);
         // Update cache
         streakCache.cachedStreak = currentStreak;
         streakCache.lastFetch = Date.now();
-        setCalorieStreak(currentStreak);
+        // Only update state if value actually changed
+        // Use ref to get current value to avoid stale closure
+        if (currentStreak !== calorieStreakRef.current) {
+          calorieStreakRef.current = currentStreak;
+          setCalorieStreak(currentStreak);
+        }
       }
     } catch (error) {
       console.error("Error fetching food logs:", error);
@@ -902,7 +958,12 @@ const HomeScreen = ({ navigation }) => {
       // Invalidate and update streak cache
       streakCache.cachedStreak = updatedStreak;
       streakCache.lastFetch = Date.now();
-      setCalorieStreak(updatedStreak);
+      // Only update state if value actually changed
+      // Use ref to get current value to avoid stale closure
+      if (updatedStreak !== calorieStreakRef.current) {
+        calorieStreakRef.current = updatedStreak;
+        setCalorieStreak(updatedStreak);
+      }
       
       setSelectedMeals(new Set());
       setIsSelectionMode(false);
@@ -966,6 +1027,7 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="auto" />
       <ScrollView showsVerticalScrollIndicator={false}>
       <HomeHeader userName={userName} selectedDate={selectedDate} navigation={navigation} />
 
@@ -1105,7 +1167,7 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.pillValueBalance}>{balanceDisplay}</Text>
               </View>
             </View>
-            {calorieStreak > 0 && <StreakBadge calorieStreak={calorieStreak} />}
+            <StreakBadge calorieStreak={calorieStreak} />
           </View>
         </View>
 

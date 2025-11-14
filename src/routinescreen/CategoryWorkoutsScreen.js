@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, findNodeHandle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -235,6 +236,7 @@ export default function CategoryWorkoutsScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: BG }}>
+      <StatusBar style="auto" />
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1, marginBottom: 8, marginLeft: 18, marginRight: 12 }}>
         <TouchableOpacity 

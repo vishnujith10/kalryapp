@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -190,6 +191,7 @@ const AddWeightScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.modalFullBg}>
+      <StatusBar style="auto" />
       {/* Custom Header */}
       <View style={styles.customHeader}>
         <TouchableOpacity 

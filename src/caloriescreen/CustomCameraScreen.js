@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -137,6 +138,7 @@ export default function CustomCameraScreen({ navigation }) {
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
+        <StatusBar style="auto" />
         <View style={styles.permissionCard}>
           <Ionicons name="camera" size={60} color="#C084FC" />
           <Text style={styles.permissionTitle}>Camera Access Required</Text>
@@ -167,6 +169,7 @@ export default function CustomCameraScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="auto" />
       <CameraView
         ref={cameraRef}
         style={styles.camera}

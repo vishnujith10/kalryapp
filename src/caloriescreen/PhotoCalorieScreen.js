@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -296,9 +297,10 @@ Guidelines:
       );
       
       // Optimistic cache update
-      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic } = require('../utils/cacheManager');
+      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic, updateMainDashboardStreakOptimistic } = require('../utils/cacheManager');
       updateMainDashboardCacheOptimistic(logData);
       updateHomeScreenCacheOptimistic(logData);
+      updateMainDashboardStreakOptimistic(); // Trigger streak update
       
     } catch (error) {
       console.error('Error logging food:', error);
@@ -524,6 +526,7 @@ The JSON object must have this structure:
   if (showErrorModal) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="auto" />
         <View style={styles.errorContainer}>
           <Ionicons name="camera-outline" size={80} color="#ccc" />
           <Text style={styles.errorTitle}>No Food Detected</Text>
@@ -546,6 +549,7 @@ The JSON object must have this structure:
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="auto" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size={50} color="#7B61FF" />
           <Text style={styles.loadingText}>Analyzing your food...</Text>
@@ -558,6 +562,7 @@ The JSON object must have this structure:
   if (!analysis) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="auto" />
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={80} color="#ff4757" />
           <Text style={styles.errorTitle}>Analysis Failed</Text>
@@ -574,6 +579,7 @@ The JSON object must have this structure:
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="auto" />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>

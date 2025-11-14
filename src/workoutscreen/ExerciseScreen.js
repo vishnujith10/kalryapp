@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useState } from 'react';
 import { BackHandler, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -284,6 +285,7 @@ const ExerciseScreen = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
+      <StatusBar style="auto" />
       {/* Header with back button */}
       <View style={styles.topHeader}>
         <TouchableOpacity

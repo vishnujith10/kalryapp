@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,7 +12,6 @@ import {
   Modal,
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -36,13 +36,13 @@ const FooterBar = ({ navigation, activeTab }) => {
     {
       key: 'Meals',
       label: 'Meals',
-      icon: <Ionicons name="barbell-outline" size={24} color={activeTab === 'Meals' ? '#232B3A' : '#232B3A'} />, // icon size 24
+      icon: <Ionicons name="restaurant-outline" size={24} color={activeTab === 'Meals' ? '#232B3A' : '#232B3A'} />, // icon size 24
       route: 'Home',
     },
     {
       key: 'Workout',
       label: 'Workout',
-      icon: <Ionicons name="fitness-outline" size={24} color={activeTab === 'Workout' ? '#7B61FF' : '#232B3A'} />,
+      icon: <Ionicons name="barbell-outline" size={24} color={activeTab === 'Workout' ? '#7B61FF' : '#232B3A'} />,
       route: 'Exercise',
     },
     {
@@ -457,7 +457,7 @@ const ProfileScreen = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#E8E9F0" />
+        <StatusBar style="auto" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#7B61FF" />
           <Text style={styles.loadingText}>Loading profile...</Text>
@@ -468,7 +468,7 @@ const ProfileScreen = () => {
   
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#E8E9F0" />
+      <StatusBar style="auto" />
       
       {/* Header */}
       <View style={styles.header}>

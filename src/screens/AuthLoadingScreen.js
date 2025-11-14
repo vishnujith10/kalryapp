@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import supabase, { handleSessionExpiry } from '../lib/supabase';
@@ -339,6 +340,7 @@ const AuthLoadingScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="auto" />
       <ActivityIndicator size="large" color="#7B61FF" />
     </View>
   );

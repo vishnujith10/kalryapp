@@ -2,6 +2,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -890,6 +891,7 @@ const HydrationTrackerScreen = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="auto" />
       {/* Header */}
       <SafeAreaView style={styles.headerContainer}>
         <View style={styles.header}>

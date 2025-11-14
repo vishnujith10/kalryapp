@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -461,9 +462,10 @@ The JSON object must have this structure:
       await createFoodLog(logData);
       
       // Optimistic cache update (Instagram pattern)
-      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic } = require('../utils/cacheManager');
+      const { updateMainDashboardCacheOptimistic, updateHomeScreenCacheOptimistic, updateMainDashboardStreakOptimistic } = require('../utils/cacheManager');
       updateMainDashboardCacheOptimistic(logData);
       updateHomeScreenCacheOptimistic(logData);
+      updateMainDashboardStreakOptimistic(); // Trigger streak update
       
       Alert.alert("Success", "Food logged successfully!", [
         { text: "OK", onPress: () => navigation.navigate("Home") },
@@ -514,6 +516,7 @@ The JSON object must have this structure:
   // UI rendering logic
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <StatusBar style="auto" />
       {/* Full-screen loading overlay when processing Convert */}
       <Modal
         visible={isConverting}

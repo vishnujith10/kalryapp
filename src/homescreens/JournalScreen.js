@@ -627,7 +627,7 @@ const JournalScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="auto" />
       
       {/* Header */}
       <View style={styles.header}>

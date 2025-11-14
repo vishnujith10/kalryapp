@@ -292,6 +292,7 @@ const SavedMealsScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingTop: 0 }} edges={['top']}>
+      <StatusBar style="auto" />
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => navigation.navigate('Home')} style={{ marginRight: 12 }}>
         <Ionicons name="chevron-back" size={24} color="black" />

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -1173,6 +1174,7 @@ const WeightTrackerScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="auto" />
       {/* Custom Header */}
       <View style={styles.customHeader}>
         <TouchableOpacity 

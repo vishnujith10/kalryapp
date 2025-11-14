@@ -1,6 +1,7 @@
 // StepTrackerScreen.js
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -659,6 +660,7 @@ const StepTrackerScreen = ({ navigation }) => {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="auto" />
         {/* Header - FIXED ICON NAME */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
