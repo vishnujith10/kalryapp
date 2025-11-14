@@ -743,33 +743,57 @@ const MainDashboardScreen = ({ route }) => {
               });
               
               if (goalType === 'lose') {
-                // Weight Loss: Progress = (startWeight - currentWeight) / (startWeight - goalWeight)
-                // Example: start=70kg, goal=60kg, current=65kg
-                // Progress = (70-65) / (70-60) = 5/10 = 50%
-                if (startWeight > goal) {
-                  const totalToLose = startWeight - goal;
-                  const lostSoFar = startWeight - latestWeight;
+                // Weight Loss: Progress should show how close current weight is to goal
+                // Progress increases as user gets closer to goal (remaining weight decreases)
+                if (startWeight > goal && latestWeight >= goal) {
+                  const remainingToLose = latestWeight - goal;
+                  const totalToLoseFromStart = startWeight - goal;
+                  
+                  // Use a reference range that ensures progress increases as remaining decreases
+                  // Formula: reference = remaining * multiplier + base
+                  // This creates a scale where progress increases faster as you get closer to goal
+                  // When remaining is small (close to goal), progress is high (>80%)
+                  // When remaining is large (far from goal), progress is lower but still meaningful
+                  const baseReference = 8; // Base reference to ensure minimum range
+                  const multiplier = 2.5; // Multiplier for remaining weight (lower = higher progress when close)
+                  const minReferenceRange = remainingToLose > 0 
+                    ? (remainingToLose * multiplier + baseReference)
+                    : totalToLoseFromStart;
+                  
+                  // Use the larger of: actual start-to-goal range or calculated reference
+                  // This ensures we use actual progress when user has lost significant weight
+                  const totalToLose = Math.max(totalToLoseFromStart, minReferenceRange);
                   
                   console.log('Weight Loss Calculation:', {
                     startWeight,
                     latestWeight,
                     goal,
+                    totalToLoseFromStart,
+                    remainingToLose,
+                    minReferenceRange,
                     totalToLose,
-                    lostSoFar,
-                    rawProgress: lostSoFar / totalToLose
+                    rawProgress: 1 - (remainingToLose / totalToLose)
                   });
                   
-                  // Handle case where user gained weight (negative progress)
-                  if (lostSoFar < 0) {
-                    prog = 0; // No progress if weight increased
-                  } else if (totalToLose > 0) {
-                    prog = Math.max(0, Math.min(1, lostSoFar / totalToLose));
+                  // Calculate progress as: how close you are to the goal
+                  // Progress = 1 - (remaining / total)
+                  // With the formula above, as remaining decreases, the ratio decreases faster
+                  // Example: remaining=6kg -> ref=23kg -> progress = 1 - (6/23) = 74%
+                  //          remaining=3kg -> ref=15.5kg -> progress = 1 - (3/15.5) = 81%
+                  // Progress increases as you get closer to goal!
+                  if (totalToLose > 0) {
+                    const remainingRatio = remainingToLose / totalToLose;
+                    prog = Math.max(0, Math.min(1, 1 - remainingRatio));
                   } else {
                     prog = 0;
                   }
                   
                   // Goal achieved when current weight <= goal weight
                   isGoalAchieved = latestWeight <= goal;
+                } else if (latestWeight < goal) {
+                  // Already achieved goal (current < goal)
+                  prog = 1;
+                  isGoalAchieved = true;
                 } else {
                   // If start <= goal, can't lose weight (invalid goal)
                   prog = 0;
