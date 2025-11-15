@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext } from 'react';
@@ -11,9 +11,8 @@ const LIGHT_BG = '#F8F9FE';
 const CARD_BG = '#FFFFFF';
 const TEXT_PRIMARY = '#1A1D2E';
 const TEXT_SECONDARY = '#6B7280';
-const ELECTRIC_BLUE = '#2563EB';
+const PRIMARY_PURPLE = '#A182F9';
 const VIBRANT_PURPLE = '#7C3AED';
-const BRIGHT_CYAN = '#06B6D4';
 const SUCCESS_GREEN = '#10B981';
 const ENERGY_ORANGE = '#F97316';
 
@@ -71,7 +70,7 @@ const GoalSummaryScreen = ({ navigation }) => {
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <View style={styles.backButtonCircle}>
-            <MaterialIcons name="arrow-back" size={24} color={TEXT_PRIMARY} />
+            <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
           </View>
         </TouchableOpacity>
         <View style={{ width: 44 }} />
@@ -89,7 +88,7 @@ const GoalSummaryScreen = ({ navigation }) => {
 
         <View style={styles.heroCard}>
           <LinearGradient
-            colors={[ELECTRIC_BLUE, BRIGHT_CYAN]}
+            colors={[PRIMARY_PURPLE, PRIMARY_PURPLE]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
@@ -114,7 +113,7 @@ const GoalSummaryScreen = ({ navigation }) => {
               colors={['#EEF2FF', '#E0E7FF']}
               style={styles.statIconBox}
             >
-              <MaterialCommunityIcons name="scale-bathroom" size={26} color={ELECTRIC_BLUE} />
+              <MaterialCommunityIcons name="scale-bathroom" size={26} color={PRIMARY_PURPLE} />
             </LinearGradient>
             <Text style={styles.statValue}>{displayWeightDiff}</Text>
             <Text style={styles.statLabel}>{selectedWeightUnit} to go</Text>
@@ -138,7 +137,7 @@ const GoalSummaryScreen = ({ navigation }) => {
               colors={['#DBEAFE', '#BFDBFE']}
               style={styles.metricIcon}
             >
-              <MaterialCommunityIcons name="heart-pulse" size={22} color={ELECTRIC_BLUE} />
+              <MaterialCommunityIcons name="heart-pulse" size={22} color={PRIMARY_PURPLE} />
             </LinearGradient>
             <View style={styles.metricInfo}>
               <Text style={styles.metricTitle}>Weekly Target</Text>
@@ -175,7 +174,7 @@ const GoalSummaryScreen = ({ navigation }) => {
             colors={['rgba(124, 58, 237, 0.05)', 'rgba(236, 72, 153, 0.05)']}
             style={styles.insightGradient}
           >
-            <MaterialCommunityIcons name="lightbulb-on" size={24} color={VIBRANT_PURPLE} />
+            <MaterialCommunityIcons name="lightbulb-on" size={24} color={PRIMARY_PURPLE} />
             <Text style={styles.insightText}>
               Consistency beats intensity. Small daily actions lead to massive results.
             </Text>
@@ -187,15 +186,10 @@ const GoalSummaryScreen = ({ navigation }) => {
           onPress={handleFinishOnboarding}
           activeOpacity={0.85}
         >
-          <LinearGradient
-            colors={[ELECTRIC_BLUE, BRIGHT_CYAN]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.buttonGradient}
-          >
+          <View style={styles.buttonActive}>
             <Text style={styles.buttonText}>Start Your Journey</Text>
             <MaterialIcons name="arrow-forward" size={22} color="#FFFFFF" />
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
 
           <View style={styles.footer}>
@@ -227,14 +221,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: CARD_BG,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
   },
   heading: {
     fontSize: 20,
@@ -273,7 +262,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     marginBottom: 20,
-    shadowColor: ELECTRIC_BLUE,
+    shadowColor: PRIMARY_PURPLE,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -450,18 +439,20 @@ const styles = StyleSheet.create({
   ctaButton: {
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: ELECTRIC_BLUE,
+    shadowColor: PRIMARY_PURPLE,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 6,
   },
-  buttonGradient: {
+  buttonActive: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     gap: 10,
+    backgroundColor: PRIMARY_PURPLE,
+    borderRadius: 16,
   },
   buttonText: {
     fontSize: 17,

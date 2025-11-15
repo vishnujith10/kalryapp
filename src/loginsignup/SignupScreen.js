@@ -1,6 +1,5 @@
-import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useEffect, useState } from 'react';
 import {
@@ -23,8 +22,7 @@ const LIGHT_BG = '#F8F9FE';
 const CARD_BG = '#FFFFFF';
 const TEXT_PRIMARY = '#1A1D2E';
 const TEXT_SECONDARY = '#6B7280';
-const ELECTRIC_BLUE = '#2563EB';
-const BRIGHT_CYAN = '#06B6D4';
+const PRIMARY_PURPLE = '#A182F9';
 
 const SignupScreen = ({ navigation }) => {
   const { onboardingData, setOnboardingData } = useContext(OnboardingContext);
@@ -352,10 +350,9 @@ const SignupScreen = ({ navigation }) => {
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} disabled={loading}>
           <View style={styles.backButtonCircle}>
-            <MaterialIcons name="arrow-back" size={24} color={TEXT_PRIMARY} />
+            <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
           </View>
         </TouchableOpacity>
-        <Text style={styles.heading}>Create Account</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -383,12 +380,7 @@ const SignupScreen = ({ navigation }) => {
           </View>
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <LinearGradient
-                colors={['#EEF2FF', '#E0E7FF']}
-                style={styles.inputIconWrapper}
-              >
-                <MaterialIcons name="email" size={20} color={ELECTRIC_BLUE} />
-              </LinearGradient>
+              
               <TextInput
                 style={styles.input}
                 placeholder="Email"
@@ -405,12 +397,7 @@ const SignupScreen = ({ navigation }) => {
             {!isGoogleSignup && (
               <>
                 <View style={[styles.inputContainer, passwordError && styles.inputContainerError]}>
-                  <LinearGradient
-                    colors={passwordError ? ['#FEE2E2', '#FECACA'] : ['#F3E8FF', '#E9D5FF']}
-                    style={styles.inputIconWrapper}
-                  >
-                    <MaterialIcons name="lock" size={20} color={passwordError ? '#EF4444' : ELECTRIC_BLUE} />
-                  </LinearGradient>
+                
                   <TextInput
                     style={styles.input}
                     placeholder="Password"
@@ -425,12 +412,7 @@ const SignupScreen = ({ navigation }) => {
                   <Text style={styles.errorText}>Password must be at least 6 characters long</Text>
                 )}
                 <View style={[styles.inputContainer, confirmPasswordError && styles.inputContainerError]}>
-                  <LinearGradient
-                    colors={confirmPasswordError ? ['#FEE2E2', '#FECACA'] : ['#DBEAFE', '#BFDBFE']}
-                    style={styles.inputIconWrapper}
-                  >
-                    <MaterialIcons name="lock" size={20} color={confirmPasswordError ? '#EF4444' : ELECTRIC_BLUE} />
-                  </LinearGradient>
+                 
                   <TextInput
                     style={styles.input}
                     placeholder="Confirm Password"
@@ -460,17 +442,12 @@ const SignupScreen = ({ navigation }) => {
                   </Text>
                 </View>
               ) : (
-                <LinearGradient
-                  colors={[ELECTRIC_BLUE, BRIGHT_CYAN]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.buttonGradient}
-                >
+                <View style={styles.buttonActive}>
                   <Text style={styles.buttonText}>
                     {isGoogleSignup ? 'Complete Signup' : 'Create Account'}
                   </Text>
                   <MaterialIcons name="arrow-forward" size={22} color="#FFFFFF" />
-                </LinearGradient>
+                </View>
               )}
             </TouchableOpacity>
 
@@ -492,7 +469,7 @@ const SignupScreen = ({ navigation }) => {
                     <ActivityIndicator size="small" color={CARD_BG} />
                   ) : (
                     <>
-                      <FontAwesome5 name="google" size={18} color={CARD_BG} />
+                      <FontAwesome5 name="google" size={18} color="#FF9800" />
                       <Text style={styles.socialButtonText}>Sign up with Google</Text>
                     </>
                   )}
@@ -533,14 +510,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: CARD_BG,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
   },
   heading: {
     fontSize: 20,
@@ -649,18 +621,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 24,
-    shadowColor: ELECTRIC_BLUE,
+    shadowColor: PRIMARY_PURPLE,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 6,
   },
-  buttonGradient: {
+  buttonActive: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     gap: 10,
+    backgroundColor: PRIMARY_PURPLE,
+    borderRadius: 16,
   },
   buttonText: {
     fontSize: 17,
@@ -705,11 +679,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: ELECTRIC_BLUE,
+    backgroundColor: PRIMARY_PURPLE,
     paddingVertical: 16,
     borderRadius: 16,
     marginBottom: 20,
-    shadowColor: ELECTRIC_BLUE,
+    shadowColor: PRIMARY_PURPLE,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -732,7 +706,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope-Regular',
   },
   loginLink: {
-    color: ELECTRIC_BLUE,
+    color: PRIMARY_PURPLE,
     fontWeight: '600',
     fontFamily: 'Manrope-Regular',
   },

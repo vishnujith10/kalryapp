@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OnboardingContext } from '../context/OnboardingContext';
 
@@ -12,8 +12,7 @@ const LIGHT_BG = '#F8F9FE';
 const CARD_BG = '#FFFFFF';
 const TEXT_PRIMARY = '#1A1D2E';
 const TEXT_SECONDARY = '#6B7280';
-const ELECTRIC_BLUE = '#2563EB';
-const BRIGHT_CYAN = '#06B6D4';
+const PRIMARY_PURPLE = '#A182F9';
 const SUCCESS_GREEN = '#10B981';
 const ENERGY_ORANGE = '#F97316';
 const WARNING_YELLOW = '#F59E0B';
@@ -31,9 +30,47 @@ const MiniProfileScreen = () => {
   const [weightKg, setWeightKg] = useState('');
   const [weightLbs, setWeightLbs] = useState('');
   const [isMetric, setIsMetric] = useState(true);
-  const [editingHeight, setEditingHeight] = useState('');
-  const [editingWeight, setEditingWeight] = useState('');
   const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const scrollViewRef = React.useRef(null);
+  const heightInputRef = React.useRef(null);
+  const weightInputRef = React.useRef(null);
+  const genderRowRef = React.useRef(null);
+  const unitToggleRef = React.useRef(null);
+  const [genderRowWidth, setGenderRowWidth] = useState(0);
+  const [unitToggleWidth, setUnitToggleWidth] = useState(0);
+  
+  // Animated values for sliding backgrounds
+  const genderSlideAnim = React.useRef(new Animated.Value(selectedGender === 'Male' ? 0 : 1)).current;
+  const unitSlideAnim = React.useRef(new Animated.Value(isMetric ? 0 : 1)).current;
+  
+  // Measure container widths for sliding animation
+  const measureGenderRow = (event) => {
+    const { width } = event.nativeEvent.layout;
+    setGenderRowWidth(width);
+  };
+  
+  const measureUnitToggle = (event) => {
+    const { width } = event.nativeEvent.layout;
+    setUnitToggleWidth(width);
+  };
+  
+  // Animate gender selection
+  useEffect(() => {
+    Animated.timing(genderSlideAnim, {
+      toValue: selectedGender === 'Male' ? 0 : 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [selectedGender]);
+  
+  // Animate unit toggle
+  useEffect(() => {
+    Animated.timing(unitSlideAnim, {
+      toValue: isMetric ? 0 : 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [isMetric]);
 
   // ✅ Disable back gesture during Google onboarding
   useFocusEffect(
@@ -69,47 +106,39 @@ const MiniProfileScreen = () => {
   }, []);
 
   const handleHeightCmChange = (val) => {
-    setEditingHeight('cm');
     setHeightCm(val);
     if (val && !isNaN(Number(val))) {
       setHeightFt((Number(val) / 30.48).toFixed(2));
     } else {
       setHeightFt('');
     }
-    setEditingHeight('');
   };
 
   const handleHeightFtChange = (val) => {
-    setEditingHeight('ft');
     setHeightFt(val);
     if (val && !isNaN(Number(val))) {
       setHeightCm((Number(val) * 30.48).toFixed(0));
     } else {
       setHeightCm('');
     }
-    setEditingHeight('');
   };
 
   const handleWeightKgChange = (val) => {
-    setEditingWeight('kg');
     setWeightKg(val);
     if (val && !isNaN(Number(val))) {
       setWeightLbs((Number(val) * 2.20462).toFixed(1));
     } else {
       setWeightLbs('');
     }
-    setEditingWeight('');
   };
 
   const handleWeightLbsChange = (val) => {
-    setEditingWeight('lbs');
     setWeightLbs(val);
     if (val && !isNaN(Number(val))) {
       setWeightKg((Number(val) / 2.20462).toFixed(1));
     } else {
       setWeightKg('');
     }
-    setEditingWeight('');
   };
 
   const minHeightCm = 100;
@@ -201,40 +230,63 @@ const MiniProfileScreen = () => {
     }
   };
 
+  // Handle focus on height/weight inputs to scroll to them
+  const handleHeightFocus = () => {
+    // Wait for keyboard to open, then scroll to end to show inputs and continue button
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  };
+
+  const handleWeightFocus = () => {
+    // Wait for keyboard to open, then scroll to end to show inputs and continue button
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="auto" />
-      <View style={styles.headerRow}>
-        {/* ✅ Hide back button for Google users */}
-        {!isGoogleUser && (
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <View style={styles.backButtonCircle}>
-              <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
-            </View>
-          </TouchableOpacity>
-        )}
-        {isGoogleUser && <View style={{ width: 44 }} />}
-        
-        <Text style={styles.heading}>Personal Setup</Text>
-        <View style={{ width: 44 }} />
-      </View>
-
-      {isGoogleUser && (
-        <View style={styles.googleWelcomeContainer}>
-          <View style={styles.googleWelcomeCard}>
-            <MaterialCommunityIcons name="google" size={20} color={ELECTRIC_BLUE} />
-            <Text style={styles.googleWelcomeText}>
-              Welcome! Let's complete your profile
-            </Text>
-          </View>
-        </View>
-      )}
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
+        <View style={styles.headerRow}>
+          {/* ✅ Hide back button for Google users */}
+          {!isGoogleUser && (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <View style={styles.backButtonCircle}>
+                <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
+              </View>
+            </TouchableOpacity>
+          )}
+          {isGoogleUser && <View style={{ width: 44 }} />}
+          
+          <Text style={styles.heading}>Personal Setup</Text>
+          <View style={{ width: 44 }} />
+        </View>
+
+        {isGoogleUser && (
+          <View style={styles.googleWelcomeContainer}>
+            <View style={styles.googleWelcomeCard}>
+              <MaterialCommunityIcons name="google" size={20} color={PRIMARY_PURPLE} />
+              <Text style={styles.googleWelcomeText}>
+                Welcome! Let&apos;s complete your profile
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="interactive"
+        >
         <View style={styles.formWrap}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Name</Text>
@@ -267,49 +319,74 @@ const MiniProfileScreen = () => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Gender</Text>
-            <View style={styles.genderRow}>
-              {genders.map(gender => (
+            <View 
+              ref={genderRowRef}
+              style={styles.genderRow}
+              onLayout={measureGenderRow}
+            >
+              {/* Animated sliding background */}
+              {genderRowWidth > 0 && (
+                <Animated.View
+                  style={[
+                    styles.genderSlideBackground,
+                    {
+                      width: (genderRowWidth - 8 - 12) / 2, // Container width - padding(8) - gap(12), divided by 2
+                      transform: [{
+                        translateX: genderSlideAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, (genderRowWidth - 8 - 12) / 2 + 12], // Slide to second button position
+                        }),
+                      }],
+                    },
+                  ]}
+                />
+              )}
+              {genders.map((gender, index) => (
                 <TouchableOpacity
                   key={gender}
-                  style={[
-                    styles.genderButton,
-                    selectedGender === gender && styles.genderButtonSelected
-                  ]}
+                  style={styles.genderButton}
                   onPress={() => setSelectedGender(gender)}
                   activeOpacity={0.7}
                 >
-                  {selectedGender === gender ? (
-                    <LinearGradient
-                      colors={[ELECTRIC_BLUE, BRIGHT_CYAN]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.genderGradient}
-                    >
-                      <MaterialCommunityIcons 
-                        name={gender === 'Male' ? 'gender-male' : 'gender-female'} 
-                        size={20} 
-                        color="#FFFFFF" 
-                      />
-                      <Text style={styles.genderTextSelected}>{gender}</Text>
-                    </LinearGradient>
-                  ) : (
-                    <View style={styles.genderContent}>
-                      <MaterialCommunityIcons 
-                        name={gender === 'Male' ? 'gender-male' : 'gender-female'} 
-                        size={20} 
-                        color={TEXT_SECONDARY} 
-                      />
-                      <Text style={styles.genderText}>{gender}</Text>
-                    </View>
-                  )}
+                  <View style={styles.genderContent}>
+                    <MaterialCommunityIcons 
+                      name={gender === 'Male' ? 'gender-male' : 'gender-female'} 
+                      size={20} 
+                      color={selectedGender === gender ? "#FFFFFF" : TEXT_SECONDARY} 
+                    />
+                    <Text style={selectedGender === gender ? styles.genderTextSelected : styles.genderText}>
+                      {gender}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          <View style={styles.unitToggleContainer}>
+          <View 
+            ref={unitToggleRef}
+            style={styles.unitToggleContainer}
+            onLayout={measureUnitToggle}
+          >
+            {/* Animated sliding background */}
+            {unitToggleWidth > 0 && (
+              <Animated.View
+                style={[
+                  styles.unitSlideBackground,
+                  {
+                    width: (unitToggleWidth - 8) / 2, // Container width - padding, divided by 2
+                    transform: [{
+                      translateX: unitSlideAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, (unitToggleWidth - 8) / 2], // Slide to second button position
+                      }),
+                    }],
+                  },
+                ]}
+              />
+            )}
             <TouchableOpacity
-              style={[styles.unitToggle, isMetric && styles.unitToggleActive]}
+              style={styles.unitToggle}
               onPress={() => setIsMetric(true)}
               activeOpacity={0.7}
             >
@@ -318,7 +395,7 @@ const MiniProfileScreen = () => {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.unitToggle, !isMetric && styles.unitToggleActive]}
+              style={styles.unitToggle}
               onPress={() => setIsMetric(false)}
               activeOpacity={0.7}
             >
@@ -333,11 +410,13 @@ const MiniProfileScreen = () => {
               <Text style={styles.measurementLabel}>Height</Text>
               <View style={styles.measurementInputWrapper}>
                 <TextInput
+                  ref={heightInputRef}
                   style={styles.measurementInput}
                   placeholder={isMetric ? "170" : "5.6"}
                   placeholderTextColor={TEXT_SECONDARY}
                   value={isMetric ? heightCm : heightFt}
                   onChangeText={isMetric ? handleHeightCmChange : handleHeightFtChange}
+                  onFocus={handleHeightFocus}
                   keyboardType="numeric"
                 />
                 <Text style={styles.measurementUnit}>{isMetric ? 'cm' : 'ft'}</Text>
@@ -348,11 +427,13 @@ const MiniProfileScreen = () => {
               <Text style={styles.measurementLabel}>Weight</Text>
               <View style={styles.measurementInputWrapper}>
                 <TextInput
+                  ref={weightInputRef}
                   style={styles.measurementInput}
                   placeholder={isMetric ? "70" : "154"}
                   placeholderTextColor={TEXT_SECONDARY}
                   value={isMetric ? weightKg : weightLbs}
                   onChangeText={isMetric ? handleWeightKgChange : handleWeightLbsChange}
+                  onFocus={handleWeightFocus}
                   keyboardType="numeric"
                 />
                 <Text style={styles.measurementUnit}>{isMetric ? 'kg' : 'lbs'}</Text>
@@ -380,32 +461,28 @@ const MiniProfileScreen = () => {
             </View>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.ctaButton, !canContinue && styles.ctaButtonDisabled]}
-          disabled={!canContinue}
-          onPress={handleContinue}
-          activeOpacity={0.85}
-        >
-          {canContinue ? (
-            <LinearGradient
-              colors={[ELECTRIC_BLUE, BRIGHT_CYAN]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.buttonGradient}
-            >
-              <Text style={styles.buttonText}>Continue</Text>
-              <MaterialIcons name="arrow-forward" size={22} color="#FFFFFF" />
-            </LinearGradient>
-          ) : (
-            <View style={styles.buttonDisabled}>
-              <Text style={styles.buttonTextDisabled}>Complete all fields</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.ctaButton, !canContinue && styles.ctaButtonDisabled]}
+            disabled={!canContinue}
+            onPress={handleContinue}
+            activeOpacity={0.85}
+          >
+            {canContinue ? (
+              <View style={styles.buttonActive}>
+                <Text style={styles.buttonText}>Continue</Text>
+                <MaterialIcons name="arrow-forward" size={22} color="#FFFFFF" />
+              </View>
+            ) : (
+              <View style={styles.buttonDisabled}>
+                <Text style={styles.buttonTextDisabled}>Complete all fields</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -431,14 +508,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: CARD_BG,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
   },
   heading: {
     fontSize: 20,
@@ -452,13 +524,13 @@ const styles = StyleSheet.create({
   },
   googleWelcomeCard: {
     flexDirection: 'row',
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#F3EFFF', // Light purple background to match theme
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     gap: 12,
     borderLeftWidth: 4,
-    borderLeftColor: ELECTRIC_BLUE,
+    borderLeftColor: PRIMARY_PURPLE,
   },
   googleWelcomeText: {
     fontSize: 14,
@@ -467,9 +539,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 200, // Extra padding to ensure inputs and button are visible above keyboard
   },
   formWrap: {
     paddingHorizontal: 24,
@@ -507,35 +585,36 @@ const styles = StyleSheet.create({
   genderRow: {
     flexDirection: 'row',
     gap: 12,
-  },
-  genderButton: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
+    position: 'relative',
     backgroundColor: CARD_BG,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderRadius: 16,
+    padding: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
-  genderButtonSelected: {
-    borderColor: ELECTRIC_BLUE,
+  genderSlideBackground: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
+    backgroundColor: PRIMARY_PURPLE,
+    borderRadius: 12,
+    zIndex: 0,
   },
-  genderGradient: {
-    flexDirection: 'row',
+  genderButton: {
+    flex: 1,
+    zIndex: 1,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
   },
   genderContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
     gap: 8,
   },
   genderText: {
@@ -555,20 +634,27 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 4,
     marginBottom: 20,
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
+  unitSlideBackground: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
+    backgroundColor: '#F3EFFF',
+    borderRadius: 12,
+    zIndex: 0,
+  },
   unitToggle: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 12,
     alignItems: 'center',
-  },
-  unitToggleActive: {
-    backgroundColor: '#EEF2FF',
+    zIndex: 1,
   },
   unitToggleText: {
     fontSize: 14,
@@ -577,7 +663,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   unitToggleTextActive: {
-    color: ELECTRIC_BLUE,
+    color: PRIMARY_PURPLE,
     fontFamily: 'Lexend-Bold',
   },
   measurementsRow: {
@@ -661,27 +747,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: LIGHT_BG,
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: LIGHT_BG,
+    width: '100%',
   },
   ctaButton: {
     borderRadius: 16,
     overflow: 'hidden',
   },
-  buttonGradient: {
+  buttonActive: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 18,
     gap: 12,
+    backgroundColor: PRIMARY_PURPLE,
+    borderRadius: 16,
   },
   buttonText: {
     fontSize: 17,

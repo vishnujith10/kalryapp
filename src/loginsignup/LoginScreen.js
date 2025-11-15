@@ -1,4 +1,4 @@
-import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { makeRedirectUri } from 'expo-auth-session';
 import { StatusBar } from 'expo-status-bar';
@@ -20,6 +20,7 @@ import supabase from '../lib/supabase';
 import { handleGoogleSignIn, handleGoogleSignOut, initializeGoogleSignIn } from './googleSignInService';
 
 const PRIMARY = '#000000';
+const PRIMARY_PURPLE = '#A182F9';
 const ORANGE = '#ff8800';
 const BACKGROUND = '#ffffff';
 const GRAY_MEDIUM = '#e0e0e0';
@@ -224,7 +225,7 @@ const LoginScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('Welcome')}
             disabled={loading}
           >
-            <MaterialIcons name="arrow-back" size={28} color={PRIMARY} />
+            <Ionicons name="chevron-back" size={28} color={PRIMARY} />
           </TouchableOpacity>
         </View>
         <View style={styles.content}>
@@ -291,7 +292,7 @@ const LoginScreen = ({ navigation }) => {
                 <ActivityIndicator size="small" color={BACKGROUND} />
               ) : (
                 <>
-                  <FontAwesome5 name="google" size={20} color={BACKGROUND} />
+                  <FontAwesome5 name="google" size={20} color="#FF9800" />
                   <Text style={styles.socialButtonText}>CONNECT WITH GOOGLE</Text>
                 </>
               )}
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: GRAY_LIGHT,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -365,13 +366,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: ORANGE,
+    color: PRIMARY_PURPLE,
     fontSize: 14,
   },
   button: {
-    backgroundColor: PRIMARY,
+    backgroundColor: PRIMARY_PURPLE,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
@@ -401,16 +402,16 @@ const styles = StyleSheet.create({
   socialButton: {
     flexDirection: 'row',
     height: 56,
-    borderRadius: 28,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
   appleButton: {
-    backgroundColor: '#000000',
+    backgroundColor: PRIMARY_PURPLE,
   },
   googleButton: {
-    backgroundColor: '#DB4437',
+    backgroundColor: PRIMARY_PURPLE,
   },
   socialButtonText: {
     color: BACKGROUND,
@@ -427,7 +428,7 @@ const styles = StyleSheet.create({
     color: GRAY_MEDIUM,
   },
   signupLink: {
-    color: ORANGE,
+    color: PRIMARY_PURPLE,
     fontWeight: 'bold',
   },
 });

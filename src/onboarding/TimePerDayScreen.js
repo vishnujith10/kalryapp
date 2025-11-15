@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useState } from 'react';
@@ -11,8 +11,7 @@ const LIGHT_BG = '#F8F9FE';
 const CARD_BG = '#FFFFFF';
 const TEXT_PRIMARY = '#1A1D2E';
 const TEXT_SECONDARY = '#6B7280';
-const ELECTRIC_BLUE = '#2563EB';
-const BRIGHT_CYAN = '#06B6D4';
+const PRIMARY_PURPLE = '#A182F9';
 const VIBRANT_PURPLE = '#7C3AED';
 
 const options = [
@@ -41,7 +40,7 @@ const TimePerDayScreen = ({ navigation }) => {
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <View style={styles.backButtonCircle}>
-            <MaterialIcons name="arrow-back" size={24} color={TEXT_PRIMARY} />
+            <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
           </View>
         </TouchableOpacity>
         <View style={{ width: 44 }} />
@@ -115,15 +114,10 @@ const TimePerDayScreen = ({ navigation }) => {
           activeOpacity={0.85}
         >
           {selected !== null ? (
-            <LinearGradient
-              colors={[ELECTRIC_BLUE, BRIGHT_CYAN]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.buttonGradient}
-            >
+            <View style={styles.buttonActive}>
               <Text style={styles.buttonText}>Continue</Text>
               <MaterialIcons name="arrow-forward" size={22} color="#FFFFFF" />
-            </LinearGradient>
+            </View>
           ) : (
             <View style={styles.buttonDisabled}>
               <Text style={styles.buttonTextDisabled}>Select your time commitment</Text>
@@ -155,14 +149,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: CARD_BG,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
   },
   heading: {
     fontSize: 20,
@@ -221,8 +210,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   optionCardSelected: {
-    borderColor: ELECTRIC_BLUE,
-    shadowColor: ELECTRIC_BLUE,
+    borderColor: PRIMARY_PURPLE,
+    shadowColor: PRIMARY_PURPLE,
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 6,
@@ -259,7 +248,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: ELECTRIC_BLUE,
+    backgroundColor: PRIMARY_PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -307,12 +296,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
   },
-  buttonGradient: {
+  buttonActive: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 18,
     gap: 12,
+    backgroundColor: PRIMARY_PURPLE,
+    borderRadius: 16,
   },
   buttonText: {
     fontSize: 17,

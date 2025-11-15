@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OnboardingContext } from '../context/OnboardingContext';
 
@@ -12,9 +12,7 @@ const LIGHT_BG = '#F8F9FE';
 const CARD_BG = '#FFFFFF';
 const TEXT_PRIMARY = '#1A1D2E';
 const TEXT_SECONDARY = '#6B7280';
-const ELECTRIC_BLUE = '#2563EB';
-const BRIGHT_CYAN = '#06B6D4';
-const VIBRANT_PURPLE = '#7C3AED';
+const PRIMARY_PURPLE = '#A182F9';
 
 const options = [
   { label: 'Instagram', icon: 'instagram', gradient: ['#FECACA', '#FCA5A5'] },
@@ -42,6 +40,7 @@ const ReferralSourceScreen = ({ navigation }) => {
   const [selected, setSelected] = useState(null);
   const [otherText, setOtherText] = useState('');
   const inputRef = useRef(null);
+  const scrollViewRef = useRef(null);
 
   const isOtherSelected = selected === 6;
   const isContinueEnabled = (selected !== null && (!isOtherSelected || (isOtherSelected && otherText.trim().length > 0)));
@@ -59,19 +58,38 @@ const ReferralSourceScreen = ({ navigation }) => {
     navigation.navigate('ActivityLevel');
   };
 
+  // Handle focus on "Other" input to scroll to it
+  const handleOtherInputFocus = () => {
+    // Wait for keyboard to open, then scroll to end to show input and continue button
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="auto" />
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <View style={styles.backButtonCircle}>
-          <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
-        </View>
-      </TouchableOpacity>
-
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <View style={styles.backButtonCircle}>
+              <Ionicons name="chevron-back" size={24} color={TEXT_PRIMARY} />
+            </View>
+          </TouchableOpacity>
+          <View style={{ width: 44 }} />
+        </View>
+
+        <ScrollView 
+          ref={scrollViewRef}
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
         <View style={styles.contentWrapper}>
           <View style={styles.header}>
             <Text style={styles.subtitle}>ONE QUICK QUESTION</Text>
@@ -121,6 +139,7 @@ const ReferralSourceScreen = ({ navigation }) => {
                 placeholder="Tell us where you found Kalry..."
                 value={otherText}
                 onChangeText={setOtherText}
+                onFocus={handleOtherInputFocus}
                 autoFocus={true}
                 placeholderTextColor={TEXT_SECONDARY}
               />
@@ -128,7 +147,7 @@ const ReferralSourceScreen = ({ navigation }) => {
           )}
 
           <View style={styles.infoCard}>
-            <MaterialCommunityIcons name="shield-check" size={20} color={VIBRANT_PURPLE} />
+            <MaterialCommunityIcons name="shield-check" size={20} color={PRIMARY_PURPLE} />
             <Text style={styles.infoText}>
               We never share your data or use it for ads
             </Text>
@@ -144,15 +163,10 @@ const ReferralSourceScreen = ({ navigation }) => {
           activeOpacity={0.85}
         >
           {isContinueEnabled ? (
-            <LinearGradient
-              colors={[ELECTRIC_BLUE, BRIGHT_CYAN]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.buttonGradient}
-            >
+            <View style={styles.buttonActive}>
               <Text style={styles.buttonText}>Continue</Text>
               <MaterialIcons name="arrow-forward" size={22} color="#FFFFFF" />
-            </LinearGradient>
+            </View>
           ) : (
             <View style={styles.buttonDisabled}>
               <Text style={styles.buttonTextDisabled}>Select an option</Text>
@@ -160,6 +174,7 @@ const ReferralSourceScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -169,21 +184,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: LIGHT_BG,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    marginBottom: 20,
+  },
   backButton: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
     zIndex: 10,
   },
- 
+  backButtonCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 200, // Extra padding to ensure input and button are visible above keyboard
   },
   contentWrapper: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 70,
   },
   header: {
     marginBottom: 28,
@@ -228,8 +257,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   optionCardSelected: {
-    borderColor: ELECTRIC_BLUE,
-    shadowColor: ELECTRIC_BLUE,
+    borderColor: PRIMARY_PURPLE,
+    shadowColor: PRIMARY_PURPLE,
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 6,
@@ -258,7 +287,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: ELECTRIC_BLUE,
+    backgroundColor: PRIMARY_PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -279,8 +308,8 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 20,
     borderWidth: 2,
-    borderColor: ELECTRIC_BLUE,
-    shadowColor: ELECTRIC_BLUE,
+    borderColor: PRIMARY_PURPLE,
+    shadowColor: PRIMARY_PURPLE,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -329,12 +358,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
   },
-  buttonGradient: {
+  buttonActive: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 18,
     gap: 12,
+    backgroundColor: PRIMARY_PURPLE,
+    borderRadius: 16,
   },
   buttonText: {
     fontSize: 17,
