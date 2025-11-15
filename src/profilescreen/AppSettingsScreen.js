@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Modal,
@@ -133,6 +134,10 @@ const AppSettingsScreen = () => {
   
   // General State - Initialize from cache
   const [language, setLanguage] = useState(() => getCachedOrDefault('language', 'English'));
+  
+  // Logout state
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const isLoggingOutRef = useRef(false);
 
   // Load settings from database
   const loadSettings = useCallback(async () => {
@@ -288,6 +293,12 @@ const AppSettingsScreen = () => {
 
   // Save settings to database
   const saveSettings = useCallback(async () => {
+    // Don't save settings if user is logging out
+    if (isLoggingOutRef.current) {
+      console.log('⏸️ Skipping settings save - user is logging out');
+      return;
+    }
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -341,7 +352,10 @@ const AppSettingsScreen = () => {
         console.log('✅ Settings saved successfully');
       }
     } catch (error) {
-      console.error('Error saving settings:', error);
+      // Don't log errors if user is logging out
+      if (!isLoggingOutRef.current) {
+        console.error('Error saving settings:', error);
+      }
     }
   }, [
     dailyReminders,
@@ -768,22 +782,40 @@ const AppSettingsScreen = () => {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
+            // Set logging out flag to prevent settings saves
+            setIsLoggingOut(true);
+            isLoggingOutRef.current = true;
+            
             try {
-              await cancelNotification('meal');
-              await cancelNotification('workout');
-              await cancelNotification('sleep');
+              // Cancel notifications in parallel (non-blocking)
+              Promise.all([
+                cancelNotification('meal'),
+                cancelNotification('workout'),
+                cancelNotification('sleep'),
+              ]).catch(err => {
+                // Silently handle notification cancellation errors
+                console.log('Notification cancellation error (non-critical):', err);
+              });
               
+              // Sign out immediately
               const { error } = await supabase.auth.signOut();
               if (error) {
+                // Reset flags on error
+                setIsLoggingOut(false);
+                isLoggingOutRef.current = false;
                 Alert.alert('Error', 'Failed to logout. Please try again.');
                 console.error('Logout error:', error);
               } else {
+                // Navigate immediately after sign out
                 navigation.reset({
                   index: 0,
-                  routes: [{ name: 'Login' }],
+                  routes: [{ name: 'Welcome' }],
                 });
               }
             } catch (error) {
+              // Reset flags on error
+              setIsLoggingOut(false);
+              isLoggingOutRef.current = false;
               Alert.alert('Error', 'An unexpected error occurred.');
               console.error('Logout error:', error);
             }
@@ -1143,9 +1175,19 @@ const AppSettingsScreen = () => {
                 {renderPillGroup(['English', 'Español'], language, setLanguage)}
               </View>
               
-              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
-                <Text style={styles.logoutButtonText}>Logout</Text>
+              <TouchableOpacity 
+                style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]} 
+                onPress={handleLogout}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? (
+                  <ActivityIndicator size="small" color={COLORS.error} />
+                ) : (
+                  <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
+                )}
+                <Text style={styles.logoutButtonText}>
+                  {isLoggingOut ? 'Logging out...' : 'Logout'}
+                </Text>
               </TouchableOpacity>
             </View>
           ))}
@@ -1155,6 +1197,20 @@ const AppSettingsScreen = () => {
           </View>
         </View>
       </ScrollView>
+      
+      {/* Logout Loading Modal */}
+      <Modal
+        visible={isLoggingOut}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.logoutModalOverlay}>
+          <View style={styles.logoutModalContent}>
+            <ActivityIndicator size="large" color={COLORS.error} />
+            <Text style={styles.logoutModalText}>Logging out...</Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1331,11 +1387,33 @@ const styles = StyleSheet.create({
     borderColor: COLORS.error,
     marginVertical: 8,
   },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
   logoutButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.error,
     marginLeft: 8,
+  },
+  logoutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  logoutModalText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.text,
   },
   footer: {
     alignItems: 'center',

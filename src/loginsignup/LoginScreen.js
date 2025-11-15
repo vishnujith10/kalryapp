@@ -6,6 +6,7 @@ import React, { useContext, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,8 +39,16 @@ const LoginScreen = ({ navigation }) => {
       console.log('✅ LoginScreen focused - Initializing Google Sign-In');
       initializeGoogleSignIn();
       
-      return () => {};
-    }, [])
+      // Handle Android hardware back button
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        navigation.navigate('Welcome');
+        return true; // Prevent default behavior
+      });
+      
+      return () => {
+        backHandler.remove();
+      };
+    }, [navigation])
   );
 
   const validateEmail = (email) => {
@@ -212,7 +221,7 @@ const LoginScreen = ({ navigation }) => {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => navigation.navigate('Welcome')}
             disabled={loading}
           >
             <MaterialIcons name="arrow-back" size={28} color={PRIMARY} />

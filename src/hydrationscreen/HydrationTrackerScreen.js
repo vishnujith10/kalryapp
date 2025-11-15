@@ -741,7 +741,7 @@ const HydrationTrackerScreen = () => {
     if (data.intake === 0) {
       return '#e5e7eb'; // Gray for no intake (circle state)
     }
-    return data.goalAchieved ? '#10b981' : '#9333ea'; // Green if goal achieved, purple otherwise
+    return data.goalAchieved ? '#10b981' : '#8A63F7'; // Green if goal achieved, purple otherwise
   };
 
   const handleGoalChange = async () => {
@@ -850,7 +850,7 @@ const HydrationTrackerScreen = () => {
 
     const backgroundColor = animatedColor.interpolate({
       inputRange: [0, 1, 2],
-      outputRange: ['#e5e7eb', '#9333ea', '#10b981']
+      outputRange: ['#e5e7eb', '#8A63F7', '#10b981']
     });
 
     return (
@@ -869,7 +869,7 @@ const HydrationTrackerScreen = () => {
           styles.dayLabel, 
           { 
             fontWeight: data.isToday ? 'bold' : 'normal',
-            color: data.isToday ? '#9333ea' : '#6b7280'
+            color: data.isToday ? '#8A63F7' : '#6b7280'
           }
         ]}>
           {data.day}
@@ -1231,7 +1231,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#a855f7',
+    backgroundColor: '#8A63F7',
     opacity: 0.9, // Slightly more opaque
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,

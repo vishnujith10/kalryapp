@@ -2167,7 +2167,7 @@ const styles = StyleSheet.create({
   playerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#A182F9',
   },
   
   playerClose: {
@@ -2224,7 +2224,7 @@ const styles = StyleSheet.create({
   },
   
   playerButton: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: '#A182F9',
     width: 64,
     height: 64,
     borderRadius: 32,
